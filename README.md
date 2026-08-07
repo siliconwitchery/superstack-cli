@@ -2,235 +2,16 @@
 
 `superstack` is the command line interface to Superstack: sign in, claim
 devices, push Lua code, and stream events and logs from your fleet. It is a
-single static binary talking to the Superstack server's JSON API.
-
-## Install
-
-Every option below needs a published release to exist first.
-
-### Linux and macOS
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/siliconwitchery/superstack-cli/main/install.sh | sh
-```
-
-To install a specific version instead:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/siliconwitchery/superstack-cli/main/install.sh | VERSION=1.2.3 sh
-```
-
-### macOS, with Homebrew
-
-```sh
-brew install --cask siliconwitchery/tap/superstack
-```
-
-### Windows, with winget
-
-```sh
-winget install SiliconWitchery.Superstack
-```
-
-### Windows, with Scoop
-
-```sh
-scoop bucket add siliconwitchery https://github.com/siliconwitchery/scoop-bucket
-scoop install superstack
-```
-
-### Arch Linux
-
-```sh
-yay -S superstack-bin
-```
-
-### Nix
-
-Superstack is not in nixpkgs yet. Until it is, install it from this flake:
-
-```sh
-nix profile install github:siliconwitchery/superstack-cli
-```
-
-Or run it without installing anything:
-
-```sh
-nix run github:siliconwitchery/superstack-cli
-```
-
-### Any platform, by hand
-
-Download an archive for your platform from the
-[releases page](https://github.com/siliconwitchery/superstack-cli/releases),
-unpack it, and move `superstack` somewhere on your `PATH`.
-
-## Build
-
-1. Install [Nix](https://nixos.org) with flakes enabled.
-
-2. Clone the repository:
-
-    ```sh
-    git clone git@github.com:siliconwitchery/superstack-cli.git
-    cd superstack-cli
-    ```
-
-3. Enter the dev shell:
-
-    ```sh
-    nix develop
-    ```
-
-4. Build and run:
-
-    ```sh
-    go build -o superstack .
-    ./superstack
-    ```
-
-## Release
-
-### One-time setup
-
-Every step here is required before the first release. A release fails if any
-of the three secrets is missing.
-
-#### Homebrew and Scoop
-
-1. Create a public repository `siliconwitchery/homebrew-tap`, ticking "Add a
-   README file" so it has a default branch.
-
-2. Create a public repository `siliconwitchery/scoop-bucket`, ticking "Add a
-   README file" so it has a default branch.
-
-3. Go to Settings > Developer settings > Personal access tokens > Fine-grained
-   tokens, and generate a token with:
-
-    - Resource owner: `siliconwitchery`
-    - Repository access: only `homebrew-tap` and `scoop-bucket`
-    - Permissions: Contents, read and write
-
-4. In this repository, go to Settings > Secrets and variables > Actions > New
-   repository secret. Name it `TAP_GITHUB_TOKEN` and paste the token in.
-
-#### winget
-
-1. Fork `microsoft/winget-pkgs` into `siliconwitchery`.
-
-2. Go to Settings > Developer settings > Personal access tokens > Tokens
-   (classic), and generate a token with the `public_repo` scope. It has to be
-   a classic token, because a fine-grained token cannot open a pull request
-   against a repository outside its resource owner.
-
-3. In this repository, add it as an Actions secret named
-   `WINGET_GITHUB_TOKEN`.
-
-#### AUR
-
-1. Register an account at
-   [aur.archlinux.org/register](https://aur.archlinux.org/register).
-
-2. Generate an SSH key with no passphrase:
-
-    ```sh
-    ssh-keygen -t ed25519 -N "" -f aur_key
-    ```
-
-3. Print the public key and paste it into "SSH Public Key" in your AUR account
-   settings:
-
-    ```sh
-    cat aur_key.pub
-    ```
-
-4. Print the private key and add it to this repository as an Actions secret
-   named `AUR_KEY`:
-
-    ```sh
-    cat aur_key
-    ```
-
-5. Delete both key files:
-
-    ```sh
-    rm aur_key aur_key.pub
-    ```
-
-### Cutting a release
-
-`main` is protected, so the version bump goes through a pull request.
-
-1. Bump `version` in `main.go` to `0.1.0`. The tag must match it exactly, or
-   the release workflow refuses to build.
-
-2. Commit it on a branch and push:
-
-    ```sh
-    git checkout -b version-0.1.0
-    git commit -am "Version 0.1.0"
-    git push -u origin version-0.1.0
-    ```
-
-3. Open a pull request from that branch, wait for `build` to pass, then merge
-   it.
-
-4. Go back to `main` and pull. Merging created a new commit, and the tag has to
-   point at that one:
-
-    ```sh
-    git checkout main
-    git pull
-    ```
-
-5. Check that `main` carries the version you expect:
-
-    ```sh
-    grep '^const version' main.go
-    ```
-
-6. Tag and push:
-
-    ```sh
-    git tag v0.1.0
-    git push origin v0.1.0
-    ```
-
-7. Wait for the release workflow to finish. It builds static binaries for
-   Linux, macOS, and Windows on amd64 and arm64, publishes the GitHub release
-   with checksums, updates the Homebrew tap and the Scoop bucket, pushes to
-   the AUR, and opens a winget pull request.
-
-8. Write the release notes into the release body on GitHub. It starts empty by
-   design. Follow the shape in CLAUDE.md.
-
-9. Check that the winget pull request opened against `microsoft/winget-pkgs`.
-   It is the one step GoReleaser reports without failing the run, so a failure
-   there is easy to miss.
-
-### Testing the pipeline
-
-A tag with a prerelease suffix publishes a GitHub prerelease and skips every
-package manager, so it exercises the whole workflow without shipping anything.
-Bump `version` to `0.0.2-rc1` through a pull request as above, then:
-
-```sh
-git tag v0.0.2-rc1
-git push origin v0.0.2-rc1
-```
-
-Tags cannot be deleted or moved, so pick a throwaway patch version rather than
-the one you intend to release.
-
-## Repository layout
+single static binary talking to the Superstack server's JSON API. The server is
+a separate project; this repo is the CLI only. It is laid out as follows:
 
 ```sh
 ├── .github/dependabot.yml # Weekly action and module update PRs
-├── .github/workflows      # CI on PRs and pushes to main, release on v* tags
+├── .github/workflows      # CI on pull requests, release on v* tags
 ├── .gitignore
 ├── .goreleaser.yaml       # Build matrix and every publishing target
-├── CLAUDE.md              # Coding principles and release conventions
-├── flake.lock             # Pinned nixpkgs for the package and the dev shell
+├── CLAUDE.md              # Coding principles and architectural overview
+├── flake.lock             # Pins nixpkgs
 ├── flake.nix              # The superstack package, and the dev shell
 ├── go.mod
 ├── install.sh             # curl-to-shell installer for Linux and macOS
@@ -240,5 +21,127 @@ the one you intend to release.
 └── README.md
 ```
 
-CI runs `goreleaser release --snapshot` on every pull request, so a mistake in
-`.goreleaser.yaml` fails there rather than halfway through a tagged release.
+## Install
+
+Each option needs a published release.
+
+- **Linux and macOS.** Pin a version by putting `VERSION=1.2.3` on the `sh`
+  side of the pipe.
+
+    ```sh
+    curl -fsSL https://raw.githubusercontent.com/siliconwitchery/superstack-cli/main/install.sh | sh
+    ```
+
+- **Homebrew:**
+
+    ```sh
+    brew install --cask siliconwitchery/tap/superstack
+    ```
+
+- **winget:**
+
+    ```sh
+    winget install SiliconWitchery.Superstack
+    ```
+
+- **Scoop:**
+
+    ```sh
+    scoop bucket add siliconwitchery https://github.com/siliconwitchery/scoop-bucket
+    scoop install superstack
+    ```
+
+- **Arch Linux:**
+
+    ```sh
+    yay -S superstack-bin
+    ```
+
+- **Nix.** Not in nixpkgs yet.
+
+    ```sh
+    nix profile install github:siliconwitchery/superstack-cli
+    ```
+
+- **Any platform.** Download an archive from the
+  [releases page](https://github.com/siliconwitchery/superstack-cli/releases),
+  unpack it, and move `superstack` onto your `PATH`.
+
+## Local development
+
+1. Install [Nix](https://nixos.org) with flakes enabled.
+
+1. Clone the repository and enter the dev shell:
+
+    ```sh
+    git clone git@github.com:siliconwitchery/superstack-cli.git ~/projects/superstack-cli
+    cd ~/projects/superstack-cli
+    nix develop
+    ```
+
+1. Build and run:
+
+    ```sh
+    go build -o superstack .
+    ./superstack
+    ```
+
+## Release setup
+
+Do everything below once.
+
+1. Create public repositories `siliconwitchery/homebrew-tap` and
+   `siliconwitchery/scoop-bucket`, each with a README.
+
+1. Fork `microsoft/winget-pkgs` into `siliconwitchery`.
+
+1. Add a fine-grained token (Settings > Developer settings > Personal access
+   tokens) as the Actions secret `TAP_GITHUB_TOKEN`:
+
+    - Resource owner: `siliconwitchery`
+    - Repository access: `homebrew-tap` and `scoop-bucket`
+    - Permissions: Contents, read and write
+
+1. Add a classic token with the `public_repo` scope as the Actions secret
+   `WINGET_GITHUB_TOKEN`. A fine-grained token cannot open the pull request.
+
+1. Register at [aur.archlinux.org](https://aur.archlinux.org/register), then:
+
+    ```sh
+    ssh-keygen -t ed25519 -N "" -f aur_key
+    cat aur_key.pub   # paste into SSH Public Key in your AUR account settings
+    cat aur_key       # add as the Actions secret AUR_KEY
+    rm aur_key aur_key.pub
+    ```
+
+1. Add one ruleset (Settings > Rules > Rulesets) targeting the default branch:
+   require a pull request with 0 approvals, require the `build` status check,
+   block force pushes, restrict deletions. Add a second targeting `v*` tags:
+   block force pushes, restrict deletions.
+
+## Releasing
+
+1. Bump `version` in `main.go`, then open and merge a pull request:
+
+    ```sh
+    git checkout -b version-0.1.0
+    git commit -am "Version 0.1.0"
+    git push -u origin version-0.1.0
+    ```
+
+1. Merging creates a new commit, and the tag has to point at that one:
+
+    ```sh
+    git checkout main && git pull
+    grep '^const version' main.go
+    git tag v0.1.0
+    git push origin v0.1.0
+    ```
+
+1. Write the release notes into the empty release body on GitHub, following the
+   shape in CLAUDE.md.
+
+1. Check that the winget pull request opened against `microsoft/winget-pkgs`.
+
+A tag carrying a prerelease suffix, `v0.0.2-rc1`, publishes a GitHub prerelease
+and skips every package manager. Tags cannot be moved or deleted.

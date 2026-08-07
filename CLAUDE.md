@@ -3,11 +3,18 @@
 Guidance for working in this repository. This file holds **only** high-level
 coding and operational principles plus the architectural overview as it takes
 shape. It must never describe product functionality or per-feature behaviour.
-The README.md holds the project-structure overview, the build instructions,
-and the release process.
+The README.md holds the project-structure overview and the setup instructions
+for local development and releasing.
 
-**This repository will be public.** Never commit secrets, tokens, or customer
-data: the entire git history ships when the repository opens.
+**This repository is public.** Never commit secrets, tokens, or customer data:
+the entire git history ships.
+
+**Built in tandem with the server.** The server lives at
+`~/projects/superstack-next` (github.com/siliconwitchery/superstack-next) and
+owns the JSON API this binary speaks. A change on either side of the wire
+usually implies one on the other, so read its CLAUDE.md before changing
+anything that crosses it. The two files share the coding principles below
+verbatim; a change to one belongs in both.
 
 ## Coding principles
 
@@ -16,7 +23,9 @@ General and meant to be reused verbatim across projects.
 - **Complete names.** Use descriptive, whole-word names for non-trivial
   variables (`tuiWidth`, not `boxW`). Short names are acceptable only for
   receivers, loop indices, `err`, `ok`, and a framework's own idiomatic short
-  names, which stay reserved for that exact framework type.
+  names: `w` for an `http.ResponseWriter`, `r` for an `*http.Request`. Keep
+  those reserved for that exact type: a reader that is not an `*http.Request`
+  is `reader`, not `r`.
 - **Breathing room.** Separate a statement that produces a value from the
   statement that consumes it with a blank line. For example: an assignment, a
   blank line, then the `if err != nil` check. Group code into readable
@@ -49,6 +58,14 @@ General and meant to be reused verbatim across projects.
 - **Table-driven tests.** Express tests as a table of input → expected cases
   iterated in a loop, not as repeated near-identical assertions.
 
+## Operational principles
+
+- Build and run with cgo disabled for a static, dependency-free binary:
+  `CGO_ENABLED=0 go build`. Run `go vet` and `go test` with `CGO_ENABLED=0`
+  too, so neither reaches for a C toolchain that need not exist.
+- Keep the dependency set small: nothing a distribution's packager would balk
+  at.
+
 ## Architecture
 
 `main.go` is the composition root. It holds one table of sections and commands,
@@ -64,14 +81,6 @@ that file and its line in the table.
 Targets are flags rather than positions. Every command that touches devices
 takes `--fleet` or `--device`, so an operation that can apply to one device or
 to many stays one verb instead of splitting into a noun-verb pair per level.
-
-## Operational principles
-
-- Build and run with cgo disabled for a static, dependency-free binary:
-  `CGO_ENABLED=0 go build`. Run `go vet` and `go test` with `CGO_ENABLED=0`
-  too, so neither reaches for a C toolchain that need not exist.
-- Keep the dependency set small: nothing a distribution's packager would balk
-  at.
 
 ## Releases
 
@@ -108,6 +117,20 @@ running `goreleaser release --snapshot` rather than by rebuilding the same
 targets by hand, so the release workflow is never the first thing to exercise
 that config.
 
+Every publisher carries `skip_upload: auto`, so a tag with a prerelease suffix
+publishes a GitHub release and touches no package manager. That is how the
+pipeline gets exercised without shipping. It leaves the four publisher pushes
+themselves untested, which only a real tag proves.
+
+Three credentials sit behind the release, and the workflow's guard checks only
+that they are present, never that they work. `TAP_GITHUB_TOKEN` is
+fine-grained and scoped to the tap and the bucket. `WINGET_GITHUB_TOKEN` has to
+be a classic token, because a fine-grained one cannot reach a repository
+outside its resource owner and so cannot open the pull request against
+Microsoft. `AUR_KEY` is a passphraseless SSH key registered with an AUR
+account. GoReleaser reports a failed winget pull request without failing the
+run, so that step needs checking by hand after a release.
+
 The generated changelog is deliberately disabled, so a fresh release starts
 with an empty body. Write the notes into it afterwards; GoReleaser keeps an
 existing body and will not overwrite them on a re-run.
@@ -139,3 +162,10 @@ security bullet when nothing was fixed.
 
 After adding or changing a major feature, re-read this file and update it so
 the principles and the architectural overview stay accurate.
+
+Keep the README minimal as the project grows: the structure overview and the
+setup steps, nothing else. Numbered imperative steps, self-contained command
+blocks, constraints stated bare. No rationale, no explanation of how something
+works, no troubleshooting. Anything that explains rather than instructs belongs
+in this file, and a step that needs a paragraph to justify it is a sign the
+step itself is wrong.
