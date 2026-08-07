@@ -1,0 +1,150 @@
+version: 2
+
+project_name: superstack
+
+env:
+  - CGO_ENABLED=0
+
+before:
+  hooks:
+    - go mod verify
+    - go vet ./...
+    - go test ./...
+
+builds:
+  - id: superstack
+    main: .
+    binary: superstack
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: superstack
+    ids:
+      - superstack
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: siliconwitchery
+    name: superstack-cli
+  mode: keep-existing
+  prerelease: auto
+
+homebrew_casks:
+  - name: superstack
+    ids:
+      - superstack
+    binaries:
+      - superstack
+    homepage: https://github.com/siliconwitchery/superstack-cli
+    description: The Superstack command line interface
+    skip_upload: auto
+    repository:
+      owner: siliconwitchery
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: Raj Nakarja
+      email: raj@siliconwitchery.com
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/superstack"]
+          end
+
+scoops:
+  - name: superstack
+    ids:
+      - superstack
+    homepage: https://github.com/siliconwitchery/superstack-cli
+    description: The Superstack command line interface
+    license: ISC
+    skip_upload: auto
+    repository:
+      owner: siliconwitchery
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: Raj Nakarja
+      email: raj@siliconwitchery.com
+
+aurs:
+  - name: superstack-bin
+    ids:
+      - superstack
+    homepage: https://github.com/siliconwitchery/superstack-cli
+    description: The Superstack command line interface
+    license: ISC
+    maintainers:
+      - Raj Nakarja <raj@siliconwitchery.com>
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: ssh://aur@aur.archlinux.org/superstack-bin.git
+    provides:
+      - superstack
+    conflicts:
+      - superstack
+    skip_upload: auto
+    commit_author:
+      name: Raj Nakarja
+      email: raj@siliconwitchery.com
+    package: |-
+      install -Dm755 "./superstack" "${pkgdir}/usr/bin/superstack"
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+      install -Dm644 "./README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+
+winget:
+  - name: superstack
+    ids:
+      - superstack
+    package_identifier: SiliconWitchery.Superstack
+    publisher: Silicon Witchery
+    publisher_url: https://siliconwitchery.com
+    publisher_support_url: https://github.com/siliconwitchery/superstack-cli/issues
+    homepage: https://github.com/siliconwitchery/superstack-cli
+    short_description: The Superstack command line interface
+    license: ISC
+    license_url: https://github.com/siliconwitchery/superstack-cli/blob/main/LICENSE
+    copyright: Silicon Witchery AB
+    skip_upload: auto
+    repository:
+      owner: siliconwitchery
+      name: winget-pkgs
+      branch: superstack-{{ .Version }}
+      token: "{{ .Env.WINGET_GITHUB_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+    commit_author:
+      name: Raj Nakarja
+      email: raj@siliconwitchery.com

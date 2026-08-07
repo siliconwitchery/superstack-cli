@@ -1,0 +1,12 @@
+# Built binaries
+/superstack
+/superstack-cli
+
+# GoReleaser output
+/dist/
+
+# nix build symlink
+/result
+
+# direnv cache, if direnv is used to enter the dev shell
+/.direnv/
