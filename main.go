@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const version = "0.0.0"
+const version = "0.0.1-rc1"
 
 type command struct {
 	name      string
