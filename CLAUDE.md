@@ -80,6 +80,11 @@ commit that bumped it. Nothing injects the version at build time, because
 `-ldflags -X` cannot write to a Go const; the release workflow instead refuses
 to build when the tag and the const disagree.
 
+The workflow also refuses to build a tag that does not sit on `main`. GitHub
+rulesets cannot express that, because a tag rule can restrict who creates a
+tag but not which commit it points at, so the check lives in the workflow
+where it can read the history.
+
 Pushing a `v*` tag is the whole release. GoReleaser builds the static binaries
 for Linux, macOS, and Windows, publishes the GitHub release with checksums,
 pushes the Homebrew cask to `siliconwitchery/homebrew-tap`, pushes the Scoop

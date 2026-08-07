@@ -26,6 +26,15 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
+      - name: Verify the tag is on main
+        run: |
+          git fetch --no-tags origin main
+
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "$GITHUB_REF_NAME points at a commit that is not on main"
+            exit 1
+          fi
+
       - name: Verify the tag matches the version in main.go
         run: |
           declared=$(sed -n 's/^const version = "\(.*\)"$/\1/p' main.go)
