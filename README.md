@@ -159,34 +159,68 @@ of the three secrets is missing.
 
 ### Cutting a release
 
-1. Bump `version` in `main.go`. The tag you push next must match it exactly, or
+`main` is protected, so the version bump goes through a pull request.
+
+1. Bump `version` in `main.go` to `0.1.0`. The tag must match it exactly, or
    the release workflow refuses to build.
 
-2. Commit and push:
+2. Commit it on a branch and push:
 
     ```sh
+    git checkout -b version-0.1.0
     git commit -am "Version 0.1.0"
-    git push
+    git push -u origin version-0.1.0
     ```
 
-3. Tag that commit and push the tag:
+3. Open a pull request from that branch, wait for `build` to pass, then merge
+   it.
+
+4. Go back to `main` and pull. Merging created a new commit, and the tag has to
+   point at that one:
+
+    ```sh
+    git checkout main
+    git pull
+    ```
+
+5. Check that `main` carries the version you expect:
+
+    ```sh
+    grep '^const version' main.go
+    ```
+
+6. Tag and push:
 
     ```sh
     git tag v0.1.0
     git push origin v0.1.0
     ```
 
-4. Wait for the release workflow to finish. It builds static binaries for
+7. Wait for the release workflow to finish. It builds static binaries for
    Linux, macOS, and Windows on amd64 and arm64, publishes the GitHub release
    with checksums, updates the Homebrew tap and the Scoop bucket, pushes to
    the AUR, and opens a winget pull request.
 
-5. Write the release notes into the release body on GitHub. It starts empty by
+8. Write the release notes into the release body on GitHub. It starts empty by
    design. Follow the shape in CLAUDE.md.
 
-6. Check that the winget pull request opened against `microsoft/winget-pkgs`.
+9. Check that the winget pull request opened against `microsoft/winget-pkgs`.
    It is the one step GoReleaser reports without failing the run, so a failure
    there is easy to miss.
+
+### Testing the pipeline
+
+A tag with a prerelease suffix publishes a GitHub prerelease and skips every
+package manager, so it exercises the whole workflow without shipping anything.
+Bump `version` to `0.0.2-rc1` through a pull request as above, then:
+
+```sh
+git tag v0.0.2-rc1
+git push origin v0.0.2-rc1
+```
+
+Tags cannot be deleted or moved, so pick a throwaway patch version rather than
+the one you intend to release.
 
 ## Repository layout
 
