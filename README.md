@@ -6,6 +6,7 @@ single static binary talking to the Superstack server's JSON API. The server is
 a separate project; this repo is the CLI only. It is laid out as follows:
 
 ```sh
+├── .envrc                 # Loads the Nix dev shell via direnv
 ├── .github/dependabot.yml # Weekly action and module update PRs
 ├── .github/workflows      # CI on pull requests, release on v* tags
 ├── .gitignore
@@ -71,22 +72,25 @@ Each option needs a published release.
 
 ## Local development
 
-1. Install [Nix](https://nixos.org) with flakes enabled.
+1. Install [Go](https://go.dev) 1.25 or newer.
 
-1. Clone the repository and enter the dev shell:
+1. Clone the repository:
 
     ```sh
     git clone git@github.com:siliconwitchery/superstack-cli.git ~/projects/superstack-cli
     cd ~/projects/superstack-cli
-    nix develop
     ```
 
 1. Build and run:
 
     ```sh
-    go build -o superstack .
+    CGO_ENABLED=0 go build -o superstack .
     ./superstack
     ```
+
+[Nix](https://nixos.org) users need no Go install: `nix develop` enters the
+dev shell, and with [direnv](https://direnv.net) hooked into your shell,
+`direnv allow` run once in the checkout loads it automatically from then on.
 
 ## Release setup
 
