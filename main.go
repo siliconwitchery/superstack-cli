@@ -5,9 +5,11 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/siliconwitchery/superstack-cli/internal/commands"
 )
 
-const version = "0.0.1-rc1"
+const version = "0.0.2"
 
 type command struct {
 	name      string
@@ -25,8 +27,8 @@ var sections = []section{
 	{
 		title: "Getting started",
 		commands: []command{
-			{name: "login", summary: "Log in with GitHub or Google"},
-			{name: "logout", summary: "Log out and forget the stored key"},
+			{name: "login", arguments: "<provider>", summary: "Log in with the selected provider", run: commands.Login},
+			{name: "logout", summary: "Log out of your account", run: commands.Logout},
 		},
 	},
 	{
@@ -71,14 +73,6 @@ var sections = []section{
 		commands: []command{
 			{name: "tail", summary: "Stream events and logs as they arrive"},
 			{name: "send", arguments: "-m <message>", summary: "Queue a message for the target to collect"},
-			{name: "pipe", summary: "Show where events are delivered, and how delivery is going"},
-			{name: "pipe set", arguments: "<url>", summary: "Deliver signed events to your own server"},
-			{name: "pipe rotate", summary: "Issue a new signing secret, printed once"},
-			{name: "hook create", arguments: "<name>", summary: "Mint an inbound URL that queues a message, printed once"},
-			{name: "hook list", summary: "List inbound URLs and when they were last called"},
-			{name: "hook revoke", arguments: "<name>", summary: "Revoke an inbound URL"},
-			{name: "deadletters", summary: "List deliveries that ran out of retries"},
-			{name: "replay", summary: "Send them again"},
 		},
 	},
 	{
@@ -183,13 +177,19 @@ Flags
   --json           Print machine-readable output
 
 Environment
-  SUPERSTACK_TOKEN  Use this key instead of the stored one
-  SUPERSTACK_FLEET  Stand in for --fleet, for continuous integration
+  SUPERSTACK_API  Talk to this server instead of the production one
 `)
 }
 
 func main() {
-	arguments := os.Args[1:]
+	commands.CliVersion = version
+
+	arguments, err := commands.TakeServerFlag(os.Args[1:])
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)
+		os.Exit(1)
+	}
 
 	if len(arguments) == 0 {
 		printHelp(os.Stdout)
@@ -246,7 +246,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := entry.run(rest)
+	err = commands.CheckServer()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)
+		os.Exit(1)
+	}
+
+	err = entry.run(rest)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)

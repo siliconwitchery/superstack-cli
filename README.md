@@ -15,6 +15,8 @@ a separate project; this repo is the CLI only. It is laid out as follows:
 ├── flake.nix              # The superstack package, and the dev shell
 ├── go.mod
 ├── install.sh             # curl-to-shell installer for Linux and macOS
+├── internal
+│   └── commands           # One file per command, plus the shared server client
 ├── LICENSE
 ├── main.go                # Entry point, version constant, and the command table
 ├── main_test.go
