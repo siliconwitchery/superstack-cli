@@ -1,0 +1,236 @@
+package commands
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func isolateKeyStorage(t *testing.T) string {
+	t.Helper()
+
+	temporary := t.TempDir()
+
+	t.Setenv("HOME", temporary)
+	t.Setenv("XDG_STATE_HOME", temporary)
+	t.Setenv("AppData", temporary)
+
+	return temporary
+}
+
+func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {
+	temporary := isolateKeyStorage(t)
+
+	path, err := keyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.HasPrefix(path, temporary) {
+		t.Fatalf("keyPath() = %q, want it under the isolated home", path)
+	}
+
+	if runtime.GOOS != "linux" {
+		return
+	}
+
+	if path != filepath.Join(temporary, "superstack", "key") {
+		t.Errorf("keyPath() = %q, want it directly under XDG_STATE_HOME", path)
+	}
+
+	t.Setenv("XDG_STATE_HOME", "")
+
+	path, err = keyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if path != filepath.Join(temporary, ".local", "state", "superstack", "key") {
+		t.Errorf("keyPath() = %q, want the ~/.local/state fallback", path)
+	}
+
+	if strings.Contains(path, ".config") {
+		t.Errorf("keyPath() = %q, must never sit in ~/.config: dotfile repos publish it", path)
+	}
+
+	t.Setenv("XDG_STATE_HOME", ".state")
+
+	path, err = keyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if path != filepath.Join(temporary, ".local", "state", "superstack", "key") {
+		t.Errorf("keyPath() = %q: a relative XDG_STATE_HOME must be ignored, never joined to the working directory", path)
+	}
+}
+
+func TestTakeServerFlag(t *testing.T) {
+	tests := []struct {
+		name          string
+		arguments     []string
+		wantRemaining string
+		wantBase      string
+		wantError     string
+	}{
+		{
+			name:          "no flag",
+			arguments:     []string{"login"},
+			wantRemaining: "login",
+		},
+		{
+			name:          "a url",
+			arguments:     []string{"--server", "http://localhost:8080", "login"},
+			wantRemaining: "login",
+			wantBase:      "http://localhost:8080",
+		},
+		{
+			name:          "a url in equals form",
+			arguments:     []string{"logout", "--server=https://staging.example.com"},
+			wantRemaining: "logout",
+			wantBase:      "https://staging.example.com",
+		},
+		{
+			name:          "a trailing slash is trimmed",
+			arguments:     []string{"--server", "http://localhost:8080/", "login"},
+			wantRemaining: "login",
+			wantBase:      "http://localhost:8080",
+		},
+		{
+			name:          "the flag between command words",
+			arguments:     []string{"fleet", "--server=http://localhost:9999", "list"},
+			wantRemaining: "fleet list",
+			wantBase:      "http://localhost:9999",
+		},
+		{
+			name:      "a missing value",
+			arguments: []string{"login", "--server"},
+			wantError: "needs a url",
+		},
+		{
+			name:      "an empty value",
+			arguments: []string{"login", "--server="},
+			wantError: "needs a url",
+		},
+		{
+			name:      "an empty value from an unset shell variable",
+			arguments: []string{"--server", "", "login"},
+			wantError: "needs a url",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			chosenApiBase = ""
+
+			t.Cleanup(func() { chosenApiBase = "" })
+
+			remaining, err := TakeServerFlag(test.arguments)
+
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if strings.Join(remaining, " ") != test.wantRemaining {
+				t.Errorf("remaining = %q, want %q", strings.Join(remaining, " "), test.wantRemaining)
+			}
+
+			if chosenApiBase != test.wantBase {
+				t.Errorf("chosenApiBase = %q, want %q", chosenApiBase, test.wantBase)
+			}
+		})
+	}
+}
+
+func TestApiRequestBasePrecedence(t *testing.T) {
+	tests := []struct {
+		name       string
+		chosenBase string
+		envBase    string
+		wantUrl    string
+	}{
+		{
+			name:    "the default",
+			wantUrl: defaultApiBase + "/login",
+		},
+		{
+			name:    "the environment overrides the default",
+			envBase: "http://localhost:7777",
+			wantUrl: "http://localhost:7777/login",
+		},
+		{
+			name:       "the flag overrides the environment",
+			chosenBase: "http://localhost:8888",
+			envBase:    "http://localhost:7777",
+			wantUrl:    "http://localhost:8888/login",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			chosenApiBase = test.chosenBase
+
+			t.Cleanup(func() { chosenApiBase = "" })
+
+			t.Setenv("SUPERSTACK_API", test.envBase)
+
+			request, err := apiRequest(http.MethodGet, "/login", nil)
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if request.URL.String() != test.wantUrl {
+				t.Errorf("url = %q, want %q", request.URL.String(), test.wantUrl)
+			}
+
+			if request.Header.Get("User-Agent") != "superstack/"+CliVersion {
+				t.Errorf("User-Agent = %q, want the CLI version", request.Header.Get("User-Agent"))
+			}
+		})
+	}
+}
+
+func TestCheckServer(t *testing.T) {
+	reachable := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	defer reachable.Close()
+
+	t.Setenv("SUPERSTACK_API", reachable.URL)
+
+	err := CheckServer()
+
+	if err != nil {
+		t.Fatalf("a reachable server reported: %v", err)
+	}
+
+	unreachable := httptest.NewServer(http.NotFoundHandler())
+
+	unreachable.Close()
+
+	t.Setenv("SUPERSTACK_API", unreachable.URL)
+
+	err = CheckServer()
+
+	if err == nil || !strings.Contains(err.Error(), "cannot be reached") {
+		t.Fatalf("error = %v, want the consistent cannot-be-reached message", err)
+	}
+
+	if !strings.Contains(err.Error(), unreachable.URL) {
+		t.Errorf("error = %v, want it to name the server address", err)
+	}
+}

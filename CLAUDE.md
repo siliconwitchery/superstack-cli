@@ -37,8 +37,9 @@ General and meant to be reused verbatim across projects.
   code cannot express on its own: an external or internal protocol, not a
   restatement of what the code does. For example, noting that a flag exists
   only because another process invokes it. The second is one-line step headings
-  that break a long procedural function into navigable sections; a step heading
-  says what the paragraph below it is for, never how it works.
+  that break a long procedural function into navigable sections; a step
+  heading is a plain sentence with no `Step:` style prefix, saying what the
+  paragraph below it is for, never how it works.
 - **Procedural code.** Always inline simple logic so readers don't have to jump
   around to see what small functions do. 1-3 line functions shouldn't exist
   unless there's a very good reason, such as wrapping something that could
@@ -57,6 +58,19 @@ General and meant to be reused verbatim across projects.
   project.
 - **Table-driven tests.** Express tests as a table of input → expected cases
   iterated in a loop, not as repeated near-identical assertions.
+- **Exact scope.** Build precisely what was asked for, nothing broader. When
+  an extra input shape, mechanism, or option seems useful, present it as a
+  choice rather than building it; extras arrive only when asked for
+  explicitly.
+- **No assumptive defaults.** A required input is required: a command missing
+  one errors and says what it takes, it never guesses what was probably
+  meant.
+- **User-facing words, never internals.** Text shown to a user describes what
+  they did or must do, never the machinery: no keys, hashes, tokens, or other
+  implementation nouns. The product is invisible plumbing and its messages
+  keep it that way.
+- **No personal data in code.** Tests and fixtures use invented neutral
+  identities, never a real name or address. Repositories publish.
 
 ## Operational principles
 
@@ -65,18 +79,35 @@ General and meant to be reused verbatim across projects.
   too, so neither reaches for a C toolchain that need not exist.
 - Keep the dependency set small: nothing a distribution's packager would balk
   at.
+- Development happens on the `dev` branch of both repositories; check the
+  current branch before the first edit, and never resume a branch that has
+  been merged and deleted.
+- During development the CLI version is the next 0.0.x above the latest
+  release tag, and the server's minimum-version gate matches it exactly.
 
 ## Architecture
 
 `main.go` is the composition root. It holds one table of sections and commands,
 and that table is the single source of truth for both the help output and
 dispatch: a command cannot exist in one and not the other. Names may be several
-words, and dispatch takes the longest match, so `pipe set` wins over `pipe`.
+words, and dispatch takes the longest match, so a two-word command always wins
+over a one-word command that prefixes it.
+
+The layout mirrors the server: `main.go` at the repository root is the
+composition root, everything else lives under `internal`.
 
 A command whose `run` is nil reports that it is not implemented yet and exits
-non-zero. Filling one in means writing its own file, holding everything that
-command needs, and pointing the table entry at it. Removing one means deleting
-that file and its line in the table.
+non-zero. Filling one in means writing its own file in `internal/commands`,
+holding everything that command needs, and pointing the table entry at it.
+Removing one means deleting that file and its line in the table.
+
+`internal/commands/client.go` holds the one seam every command shares: the
+server base URL, the stored key location, the request builder that stamps the
+CLI version into User-Agent for the server's version negotiation, the
+reachability check `main` runs before dispatching any command that talks to
+the server, and the hidden `--server <url>` flag development uses to aim a
+run at another server. The flag is deliberately absent from the help and wins
+over `SUPERSTACK_API`.
 
 Targets are flags rather than positions. Every command that touches devices
 takes `--fleet` or `--device`, so an operation that can apply to one device or
