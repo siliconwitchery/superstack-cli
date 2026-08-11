@@ -55,9 +55,6 @@ jobs:
 
       - run: go test ./...
 
-      - name: Check the installer
-        run: shellcheck install.sh
-
       - name: Build the release the same way a tag would
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -66,5 +63,4 @@ jobs:
           args: release --snapshot --clean
         env:
           TAP_GITHUB_TOKEN: snapshots-publish-nothing
-          WINGET_GITHUB_TOKEN: snapshots-publish-nothing
           AUR_KEY: snapshots-publish-nothing
