@@ -6,6 +6,7 @@ single static binary talking to the Superstack server's JSON API. The server is
 a separate project; this repo is the CLI only. It is laid out as follows:
 
 ```sh
+├── .envrc                 # Loads the Nix dev shell via direnv
 ├── .github/dependabot.yml # Weekly action and module update PRs
 ├── .github/workflows      # CI on pull requests, release on v* tags
 ├── .gitignore
@@ -14,7 +15,6 @@ a separate project; this repo is the CLI only. It is laid out as follows:
 ├── flake.lock             # Pins nixpkgs
 ├── flake.nix              # The superstack package, and the dev shell
 ├── go.mod
-├── install.sh             # curl-to-shell installer for Linux and macOS
 ├── internal
 │   └── commands           # One file per command, plus the shared server client
 ├── LICENSE
@@ -27,23 +27,10 @@ a separate project; this repo is the CLI only. It is laid out as follows:
 
 Each option needs a published release.
 
-- **Linux and macOS.** Pin a version by putting `VERSION=1.2.3` on the `sh`
-  side of the pipe.
-
-    ```sh
-    curl -fsSL https://raw.githubusercontent.com/siliconwitchery/superstack-cli/main/install.sh | sh
-    ```
-
 - **Homebrew:**
 
     ```sh
     brew install --cask siliconwitchery/tap/superstack
-    ```
-
-- **winget:**
-
-    ```sh
-    winget install SiliconWitchery.Superstack
     ```
 
 - **Scoop:**
@@ -71,22 +58,25 @@ Each option needs a published release.
 
 ## Local development
 
-1. Install [Nix](https://nixos.org) with flakes enabled.
+1. Install [Go](https://go.dev) 1.25 or newer.
 
-1. Clone the repository and enter the dev shell:
+1. Clone the repository:
 
     ```sh
     git clone git@github.com:siliconwitchery/superstack-cli.git ~/projects/superstack-cli
     cd ~/projects/superstack-cli
-    nix develop
     ```
 
 1. Build and run:
 
     ```sh
-    go build -o superstack .
+    CGO_ENABLED=0 go build -o superstack .
     ./superstack
     ```
+
+[Nix](https://nixos.org) users need no Go install: `nix develop` enters the
+dev shell, and with [direnv](https://direnv.net) hooked into your shell,
+`direnv allow` run once in the checkout loads it automatically from then on.
 
 ## Release setup
 
@@ -95,17 +85,12 @@ Do everything below once.
 1. Create public repositories `siliconwitchery/homebrew-tap` and
    `siliconwitchery/scoop-bucket`, each with a README.
 
-1. Fork `microsoft/winget-pkgs` into `siliconwitchery`.
-
 1. Add a fine-grained token (Settings > Developer settings > Personal access
    tokens) as the Actions secret `TAP_GITHUB_TOKEN`:
 
     - Resource owner: `siliconwitchery`
     - Repository access: `homebrew-tap` and `scoop-bucket`
     - Permissions: Contents, read and write
-
-1. Add a classic token with the `public_repo` scope as the Actions secret
-   `WINGET_GITHUB_TOKEN`. A fine-grained token cannot open the pull request.
 
 1. Register at [aur.archlinux.org](https://aur.archlinux.org/register), then:
 
@@ -142,8 +127,6 @@ Do everything below once.
 
 1. Write the release notes into the empty release body on GitHub, following the
    shape in CLAUDE.md.
-
-1. Check that the winget pull request opened against `microsoft/winget-pkgs`.
 
 A tag carrying a prerelease suffix, `v0.0.2-rc1`, publishes a GitHub prerelease
 and skips every package manager. Tags cannot be moved or deleted.

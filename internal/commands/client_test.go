@@ -3,6 +3,7 @@ package commands
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -19,6 +20,36 @@ func isolateKeyStorage(t *testing.T) string {
 	t.Setenv("AppData", temporary)
 
 	return temporary
+}
+
+func loggedInTestServer(t *testing.T, handler http.Handler) {
+	t.Helper()
+
+	isolateKeyStorage(t)
+
+	path, err := keyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Dir(path), 0o700)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(path, []byte("ssk_test\n"), 0o600)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(handler)
+
+	t.Cleanup(server.Close)
+
+	t.Setenv("SUPERSTACK_API", server.URL)
 }
 
 func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {

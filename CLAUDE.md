@@ -109,9 +109,12 @@ the server, and the hidden `--server <url>` flag development uses to aim a
 run at another server. The flag is deliberately absent from the help and wins
 over `SUPERSTACK_API`.
 
-Targets are flags rather than positions. Every command that touches devices
-takes `--fleet` or `--device`, so an operation that can apply to one device or
-to many stays one verb instead of splitting into a noun-verb pair per level.
+Targets are positional. A fleet is named by the id `fleet list` shows, a
+device by its IMEI, and a verb that can act on either takes one argument
+accepting both. There is no default target and no bypass flag: a command
+missing its target errors, and the destructive verbs ask for interactive
+confirmation before acting. `internal/commands/fleets.go` holds the fleet
+fetch the fleet-reading commands share.
 
 ## Releases
 
@@ -128,19 +131,21 @@ where it can read the history.
 Pushing a `v*` tag is the whole release. GoReleaser builds the static binaries
 for Linux, macOS, and Windows, publishes the GitHub release with checksums,
 pushes the Homebrew cask to `siliconwitchery/homebrew-tap`, pushes the Scoop
-manifest to `siliconwitchery/scoop-bucket`, pushes the `superstack-bin`
-PKGBUILD to the AUR, and opens a winget pull request against
-`microsoft/winget-pkgs` from the fork at `siliconwitchery/winget-pkgs`. The
-`install.sh` at the repo root installs straight from GitHub Releases and needs
-no per-release attention.
+manifest to `siliconwitchery/scoop-bucket`, and pushes the `superstack-bin`
+PKGBUILD to the AUR. There is deliberately no winget package (its pull
+requests review too slowly for the version gate's forced upgrades, and scoop
+is the standard channel for developer tools), no `install.sh` (manual
+installs are a download from the releases page, unpacked onto the PATH), and
+no self-update command in the CLI (each channel updates itself; the server's
+version gate is what prompts users to do so).
 
-The flake is the fifth distribution path, and the only one not driven by a
-tag. It builds from source at whatever commit the user points it at, so it
-needs no release to work. Superstack is not in nixpkgs and will not be until
-the project has traction, so the flake is how Nix users install until then.
-`flake.nix` reads the version straight out of `main.go`, which keeps the
-single source of truth intact, and renames the binary in `postInstall`
-because Go names it after the module path rather than after the command.
+The flake is the one distribution path not driven by a tag. It builds from
+source at whatever commit the user points it at, so it needs no release to
+work. Superstack is not in nixpkgs and will not be until the project has
+traction, so the flake is how Nix users install until then. `flake.nix`
+reads the version straight out of `main.go`, which keeps the single source
+of truth intact, and renames the binary in `postInstall` because Go names it
+after the module path rather than after the command.
 
 `.goreleaser.yaml` is the only description of the build matrix. Nothing else
 may restate it, because a second copy drifts. CI proves the release path by
@@ -150,17 +155,13 @@ that config.
 
 Every publisher carries `skip_upload: auto`, so a tag with a prerelease suffix
 publishes a GitHub release and touches no package manager. That is how the
-pipeline gets exercised without shipping. It leaves the four publisher pushes
+pipeline gets exercised without shipping. It leaves the three publisher pushes
 themselves untested, which only a real tag proves.
 
-Three credentials sit behind the release, and the workflow's guard checks only
+Two credentials sit behind the release, and the workflow's guard checks only
 that they are present, never that they work. `TAP_GITHUB_TOKEN` is
-fine-grained and scoped to the tap and the bucket. `WINGET_GITHUB_TOKEN` has to
-be a classic token, because a fine-grained one cannot reach a repository
-outside its resource owner and so cannot open the pull request against
-Microsoft. `AUR_KEY` is a passphraseless SSH key registered with an AUR
-account. GoReleaser reports a failed winget pull request without failing the
-run, so that step needs checking by hand after a release.
+fine-grained and scoped to the tap and the bucket. `AUR_KEY` is a
+passphraseless SSH key registered with an AUR account.
 
 The generated changelog is deliberately disabled, so a fresh release starts
 with an empty body. Write the notes into it afterwards; GoReleaser keeps an

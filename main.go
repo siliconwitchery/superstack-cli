@@ -34,45 +34,46 @@ var sections = []section{
 	{
 		title: "Fleets",
 		commands: []command{
-			{name: "fleet create", arguments: "<name>", summary: "Create a fleet"},
-			{name: "fleet list", summary: "List the fleets you can reach"},
-			{name: "fleet rename", arguments: "<name>", summary: "Rename a fleet"},
-			{name: "fleet delete", summary: "Delete a fleet and release its devices"},
+			{name: "fleet create", arguments: "<name>", summary: "Create a fleet", run: commands.FleetCreate},
+			{name: "fleet list", summary: "List the fleets you can reach", run: commands.FleetList},
+			{name: "fleet rename", arguments: "<fleet_id> <new_name>", summary: "Rename a fleet", run: commands.FleetRename},
+			{name: "fleet transfer", arguments: "<fleet_id> <email>", summary: "Hand a fleet to a new owner", run: commands.FleetTransfer},
+			{name: "fleet delete", arguments: "<fleet_id>", summary: "Delete a fleet and release its devices", run: commands.FleetDelete},
 		},
 	},
 	{
 		title: "People",
 		commands: []command{
-			{name: "member add", arguments: "<email>", summary: "Give someone access to a fleet"},
-			{name: "member list", summary: "List the people who can reach a fleet"},
-			{name: "member remove", arguments: "<email>", summary: "Take away someone's access"},
+			{name: "member add", arguments: "<email> <fleet_id>", summary: "Give someone access to a fleet", run: commands.MemberAdd},
+			{name: "member list", arguments: "<fleet_id>", summary: "List the people who can reach a fleet", run: commands.MemberList},
+			{name: "member remove", arguments: "<email> <fleet_id>", summary: "Take away someone's access", run: commands.MemberRemove},
 		},
 	},
 	{
 		title: "Devices",
 		commands: []command{
-			{name: "claim", arguments: "<imei> [name]", summary: "Claim a device into a fleet, then press its button"},
-			{name: "devices", summary: "List devices, their state, and when they were last seen"},
-			{name: "rename", arguments: "<name>", summary: "Rename a device"},
-			{name: "release", summary: "Wipe a device and hand it back"},
-			{name: "start", summary: "Run the code on the target"},
-			{name: "stop", summary: "Halt the code on the target"},
-			{name: "restart", summary: "Restart the code on the target"},
+			{name: "claim", arguments: "<imei> <fleet_id> [name]", summary: "Claim a device into a fleet, then press its button"},
+			{name: "devices", arguments: "[fleet_id]", summary: "List devices, their state, and when they were last seen"},
+			{name: "rename", arguments: "<imei> <new_name>", summary: "Rename a device"},
+			{name: "release", arguments: "<imei>", summary: "Wipe a device and hand it back"},
+			{name: "start", arguments: "<imei>", summary: "Run the code on the target"},
+			{name: "stop", arguments: "<imei>", summary: "Halt the code on the target"},
+			{name: "restart", arguments: "<imei>", summary: "Restart the code on the target"},
 		},
 	},
 	{
 		title: "Files",
 		commands: []command{
-			{name: "upload", arguments: "<path>", summary: "Upload a file or directory to the target"},
-			{name: "download", arguments: "<path>", summary: "Download the target's files into <path>"},
-			{name: "dev", arguments: "<path>", summary: "Upload on every change, and tail"},
+			{name: "upload", arguments: "<imei|fleet_id> <file> ...", summary: "Upload files or directories to the target"},
+			{name: "download", arguments: "<imei|fleet_id> <path>", summary: "Download the target's files into <path>"},
+			{name: "dev", arguments: "<imei|fleet_id> <file> ... [--log-file <file>]", summary: "Upload on every change, and tail"},
 		},
 	},
 	{
 		title: "Data",
 		commands: []command{
-			{name: "tail", summary: "Stream events and logs as they arrive"},
-			{name: "send", arguments: "-m <message>", summary: "Queue a message for the target to collect"},
+			{name: "tail", arguments: "<imei|fleet_id> [--log-file <file>]", summary: "Stream events and logs as they arrive"},
+			{name: "send", arguments: "<imei|fleet_id> -m <message>", summary: "Queue a message for the target to collect"},
 		},
 	},
 	{
@@ -86,7 +87,6 @@ var sections = []section{
 	{
 		title: "Superstack",
 		commands: []command{
-			{name: "upgrade", summary: "Replace this binary with the latest release"},
 			{name: "version", summary: "Show the version"},
 			{name: "help", arguments: "[command]", summary: "Show this help, or help for one command"},
 		},
@@ -165,16 +165,8 @@ func printHelp(writer io.Writer) {
 	}
 
 	fmt.Fprint(writer, `
-Targets
-  Every command that touches devices takes --fleet or --device. With neither,
-  it acts on your only fleet, and stops if you can reach more than one.
-
 Flags
-  --fleet <id>     Act on every device in this fleet
-  --device <name>  Act on one device, by name or by IMEI
-  --role <role>    admin or member, when adding someone to a fleet
-  --yes            Do not ask before acting on more than one device
-  --json           Print machine-readable output
+  --json  Print machine-readable output
 
 Environment
   SUPERSTACK_API  Talk to this server instead of the production one
