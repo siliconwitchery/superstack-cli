@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -91,6 +92,40 @@ func apiRequest(method string, path string, body io.Reader) (*http.Request, erro
 	}
 
 	request.Header.Set("User-Agent", "superstack/"+CliVersion)
+
+	return request, nil
+}
+
+func authenticatedRequest(method string, path string, body io.Reader) (*http.Request, error) {
+	storedKeyPath, err := keyPath()
+
+	if err != nil {
+		return nil, err
+	}
+
+	keyBytes, err := os.ReadFile(storedKeyPath)
+
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, errors.New("you are not logged in, run login first")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	key := strings.TrimSpace(string(keyBytes))
+
+	if key == "" {
+		return nil, errors.New("you are not logged in, run login first")
+	}
+
+	request, err := apiRequest(method, path, body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	request.Header.Set("Authorization", "Bearer "+key)
 
 	return request, nil
 }

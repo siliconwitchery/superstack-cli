@@ -1,0 +1,60 @@
+package commands
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+)
+
+func FleetTransfer(arguments []string) error {
+
+	if len(arguments) != 2 || arguments[1] == "" {
+		return errors.New("fleet transfer takes a fleet id and an email address")
+	}
+
+	fleetId, err := strconv.ParseInt(arguments[0], 10, 64)
+
+	if err != nil || fleetId < 1 {
+		return errors.New("the fleet id is the number shown by fleet list")
+	}
+
+	email := arguments[1]
+
+	body, err := json.Marshal(map[string]string{"email": email})
+
+	if err != nil {
+		return err
+	}
+
+	request, err := authenticatedRequest(http.MethodPost,
+		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/owner", bytes.NewReader(body))
+
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := apiClient.Do(request)
+
+	if err != nil {
+		return fmt.Errorf("the server could not be reached: %w", err)
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+
+		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+	}
+
+	fmt.Printf("Transferred the fleet to %s.\n", email)
+
+	return nil
+}

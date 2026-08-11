@@ -109,9 +109,12 @@ the server, and the hidden `--server <url>` flag development uses to aim a
 run at another server. The flag is deliberately absent from the help and wins
 over `SUPERSTACK_API`.
 
-Targets are flags rather than positions. Every command that touches devices
-takes `--fleet` or `--device`, so an operation that can apply to one device or
-to many stays one verb instead of splitting into a noun-verb pair per level.
+Targets are positional. A fleet is named by the id `fleet list` shows, a
+device by its IMEI, and a verb that can act on either takes one argument
+accepting both. There is no default target and no bypass flag: a command
+missing its target errors, and the destructive verbs ask for interactive
+confirmation before acting. `internal/commands/fleets.go` holds the fleet
+fetch the fleet-reading commands share.
 
 ## Releases
 
