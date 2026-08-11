@@ -87,7 +87,7 @@ var sections = []section{
 	{
 		title: "Superstack",
 		commands: []command{
-			{name: "upgrade", summary: "Replace this binary with the latest release"},
+			{name: "upgrade", summary: "Replace this binary with the latest release", run: commands.Upgrade},
 			{name: "version", summary: "Show the version"},
 			{name: "help", arguments: "[command]", summary: "Show this help, or help for one command"},
 		},
@@ -239,11 +239,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = commands.CheckServer()
+	// Upgrade talks to GitHub rather than the server, and must keep working
+	// while the server's version gate is refusing this build
+	if entry.name != "upgrade" {
+		err = commands.CheckServer()
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)
-		os.Exit(1)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "superstack: %s\n", err)
+			os.Exit(1)
+		}
 	}
 
 	err = entry.run(rest)
