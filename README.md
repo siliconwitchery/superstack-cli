@@ -1,7 +1,7 @@
 # Superstack CLI
 
 `superstack` is the command line interface to Superstack: sign in, claim
-devices, push Lua code, and stream events and logs from your fleet. It is a
+devices, push Lua code, and stream logs from your fleet. It is a
 single static binary talking to the Superstack server's JSON API. The server is
 a separate project; this repo is the CLI only. It is laid out as follows:
 
