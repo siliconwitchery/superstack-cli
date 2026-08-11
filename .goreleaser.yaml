@@ -118,33 +118,3 @@ aurs:
       install -Dm755 "./superstack" "${pkgdir}/usr/bin/superstack"
       install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
       install -Dm644 "./README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
-
-winget:
-  - name: superstack
-    ids:
-      - superstack
-    package_identifier: SiliconWitchery.Superstack
-    publisher: Silicon Witchery
-    publisher_url: https://siliconwitchery.com
-    publisher_support_url: https://github.com/siliconwitchery/superstack-cli/issues
-    homepage: https://github.com/siliconwitchery/superstack-cli
-    short_description: The Superstack command line interface
-    license: ISC
-    license_url: https://github.com/siliconwitchery/superstack-cli/blob/main/LICENSE
-    copyright: Silicon Witchery AB
-    skip_upload: auto
-    repository:
-      owner: siliconwitchery
-      name: winget-pkgs
-      branch: superstack-{{ .Version }}
-      token: "{{ .Env.WINGET_GITHUB_TOKEN }}"
-      pull_request:
-        enabled: true
-        draft: false
-        base:
-          owner: microsoft
-          name: winget-pkgs
-          branch: master
-    commit_author:
-      name: Raj Nakarja
-      email: raj@siliconwitchery.com

@@ -53,16 +53,10 @@ jobs:
       - name: Verify the publishing credentials are present
         env:
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
           AUR_KEY: ${{ secrets.AUR_KEY }}
         run: |
           if [ -z "$TAP_GITHUB_TOKEN" ]; then
             echo "TAP_GITHUB_TOKEN is unset, and GoReleaser would skip the tap and bucket uploads without failing"
-            exit 1
-          fi
-
-          if [ -z "$WINGET_GITHUB_TOKEN" ]; then
-            echo "WINGET_GITHUB_TOKEN is unset, and GoReleaser would skip the winget pull request without failing"
             exit 1
           fi
 
@@ -79,5 +73,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
           AUR_KEY: ${{ secrets.AUR_KEY }}
