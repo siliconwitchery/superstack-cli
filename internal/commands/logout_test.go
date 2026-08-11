@@ -67,7 +67,9 @@ func TestLogout(t *testing.T) {
 				server.Close()
 			}
 
-			t.Setenv("SUPERSTACK_API", server.URL)
+			chosenApiBase = server.URL
+
+			t.Cleanup(func() { chosenApiBase = "" })
 
 			path, err := keyPath()
 
