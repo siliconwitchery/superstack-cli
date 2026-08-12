@@ -62,10 +62,9 @@ var sections = []section{
 		},
 	},
 	{
-		title: "Data",
+		title: "Logs",
 		commands: []command{
 			{name: "tail", arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", summary: "Stream the target's log as it arrives"},
-			{name: "send", arguments: "<imei|fleet_id> -m <message>", summary: "Queue a message for the target to collect"},
 		},
 	},
 	{
@@ -79,9 +78,9 @@ var sections = []section{
 	{
 		title: "Keys",
 		commands: []command{
-			{name: "key create", arguments: "<fleet_id> [label]", summary: "Create a key for sending data to a fleet"},
-			{name: "key list", arguments: "[fleet_id]", summary: "List the keys that can reach your fleets"},
-			{name: "key revoke", arguments: "<key_id>", summary: "Stop a key from reaching its fleet"},
+			{name: "key create", arguments: "<fleet_id> <label>", summary: "Create a key for sending data to a fleet", run: commands.KeyCreate},
+			{name: "key list", arguments: "[fleet_id]", summary: "List the keys that can reach your fleets", run: commands.KeyList},
+			{name: "key revoke", arguments: "<key_id>", summary: "Stop a key from reaching its fleet", run: commands.KeyRevoke},
 		},
 	},
 	{
