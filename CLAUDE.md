@@ -10,7 +10,7 @@ for local development and releasing.
 the entire git history ships.
 
 **Built in tandem with the server.** The server lives at
-`~/projects/superstack-next` (github.com/siliconwitchery/superstack-next) and
+`~/projects/superstack-server` (github.com/siliconwitchery/superstack-server) and
 owns the JSON API this binary speaks. A change on either side of the wire
 usually implies one on the other, so read its CLAUDE.md before changing
 anything that crosses it. The two files share the coding principles below
