@@ -1,11 +1,13 @@
 package commands
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -53,7 +55,15 @@ func AccountTopup(arguments []string) error {
 		return errors.New("the payment page could not be opened, try again")
 	}
 
-	fmt.Printf("Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the payment completes.\n", opened.Url)
+	fmt.Printf("Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the payment completes.\nPress enter to open the browser.\n", opened.Url)
+
+	_, err = bufio.NewReader(os.Stdin).ReadString('\n')
+
+	if err != nil {
+		return nil
+	}
+
+	openBrowser(opened.Url)
 
 	return nil
 }

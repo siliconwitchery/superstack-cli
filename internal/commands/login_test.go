@@ -251,6 +251,10 @@ func TestLogin(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			isolateKeyStorage(t)
 
+			answerOnStdin(t, "")
+
+			captureBrowserOpens(t)
+
 			previousMinimum := minimumPollInterval
 
 			minimumPollInterval = 0
@@ -319,6 +323,42 @@ func TestLogin(t *testing.T) {
 				t.Errorf("key file mode = %v, want 0600", info.Mode().Perm())
 			}
 		})
+	}
+}
+
+func TestLoginOpensTheBrowserOnEnter(t *testing.T) {
+	isolateKeyStorage(t)
+
+	previousMinimum := minimumPollInterval
+
+	minimumPollInterval = 0
+
+	t.Cleanup(func() { minimumPollInterval = previousMinimum })
+
+	fakeProviderForLogin(t, "gitlab", 0, []string{`{"access_token": "glpat-test"}`})
+
+	fakeSuperstack(t)
+
+	browserOpens := captureBrowserOpens(t)
+
+	answerOnStdin(t, "\n")
+
+	_, err := captureStdout(t, func() error {
+		return Login([]string{"gitlab"})
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case url := <-browserOpens:
+		if url != "https://gitlab.com/-/user_settings/device?user_code=WDJB-MJHT" {
+			t.Errorf("the browser opened %q, want the verification link with the code filled in", url)
+		}
+
+	case <-time.After(2 * time.Second):
+		t.Fatal("the browser never opened")
 	}
 }
 

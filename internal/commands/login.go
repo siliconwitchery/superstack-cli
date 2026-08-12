@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -134,6 +135,17 @@ func Login(arguments []string) error {
 
 	fmt.Printf("Copy your one-time code: %s\n", code.UserCode)
 	fmt.Printf("Then enter it at %s\n", enterAt)
+	fmt.Println("Press enter to open the browser.")
+
+	// The read sits in a goroutine so an unpressed key never stalls the
+	// poll: the code may just as well be entered on another device.
+	go func() {
+		_, err := bufio.NewReader(os.Stdin).ReadString('\n')
+
+		if err == nil {
+			openBrowser(enterAt)
+		}
+	}()
 
 	// Poll until the code is entered
 	deadline := time.Now().Add(time.Duration(code.ExpiresIn) * time.Second)

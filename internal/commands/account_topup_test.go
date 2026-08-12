@@ -9,14 +9,23 @@ import (
 
 func TestAccountTopup(t *testing.T) {
 	tests := []struct {
-		name      string
-		arguments []string
-		wantPath  string
-		refusal   string
-		wantError string
+		name        string
+		arguments   []string
+		stdin       string
+		wantPath    string
+		wantBrowser bool
+		refusal     string
+		wantError   string
 	}{
 		{
-			name:      "a top-up link",
+			name:        "a top-up link opened on enter",
+			arguments:   []string{"3"},
+			stdin:       "\n",
+			wantPath:    "/fleets/3/topup",
+			wantBrowser: true,
+		},
+		{
+			name:      "a top-up link left alone",
 			arguments: []string{"3"},
 			wantPath:  "/fleets/3/topup",
 		},
@@ -63,6 +72,10 @@ func TestAccountTopup(t *testing.T) {
 
 			loggedInTestServer(t, mux)
 
+			answerOnStdin(t, test.stdin)
+
+			browserOpens := captureBrowserOpens(t)
+
 			printed, err := captureStdout(t, func() error {
 				return AccountTopup(test.arguments)
 			})
@@ -81,6 +94,20 @@ func TestAccountTopup(t *testing.T) {
 
 			if !strings.Contains(printed, "https://checkout.stripe.com/c/pay/cs_test_1") {
 				t.Errorf("the output %q does not show the payment link", printed)
+			}
+
+			select {
+			case url := <-browserOpens:
+				if !test.wantBrowser {
+					t.Errorf("the browser opened %q although enter was never pressed", url)
+				} else if url != "https://checkout.stripe.com/c/pay/cs_test_1" {
+					t.Errorf("the browser opened %q, want the payment link", url)
+				}
+
+			default:
+				if test.wantBrowser {
+					t.Error("the browser never opened")
+				}
 			}
 		})
 	}
