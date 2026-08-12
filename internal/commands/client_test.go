@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +10,34 @@ import (
 	"strings"
 	"testing"
 )
+
+func captureStdout(t *testing.T, run func() error) (string, error) {
+	t.Helper()
+
+	readEnd, writeEnd, err := os.Pipe()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := os.Stdout
+
+	os.Stdout = writeEnd
+
+	runError := run()
+
+	os.Stdout = stdout
+
+	writeEnd.Close()
+
+	printed, err := io.ReadAll(readEnd)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(printed), runError
+}
 
 func isolateKeyStorage(t *testing.T) string {
 	t.Helper()
