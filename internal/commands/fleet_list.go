@@ -34,13 +34,15 @@ func FleetList(arguments []string) error {
 		return nil
 	}
 
-	idWidth := 0
-	nameWidth := 0
+	idWidth := len("ID")
+	nameWidth := len("NAME")
 
 	for _, fleet := range fleets {
 		idWidth = max(idWidth, len(strconv.FormatInt(fleet.Id, 10)))
 		nameWidth = max(nameWidth, len(fleet.Name))
 	}
+
+	fmt.Printf("%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "ROLE")
 
 	for _, fleet := range fleets {
 		role := "member"
