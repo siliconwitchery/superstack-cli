@@ -43,7 +43,31 @@ func FleetDelete(arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	fmt.Printf("Delete %q and release its devices? [y/N] ", name)
+	balances, err := fetchBalances()
+
+	if err != nil {
+		return err
+	}
+
+	forfeited := ""
+
+	for _, balance := range balances {
+		if balance.Fleet != fleetId {
+			continue
+		}
+
+		value, err := strconv.ParseFloat(balance.Balance, 64)
+
+		if err == nil && value > 0 {
+			forfeited = formatBalance(balance)
+		}
+	}
+
+	if forfeited == "" {
+		fmt.Printf("Delete %q and release its devices? [y/N] ", name)
+	} else {
+		fmt.Printf("Delete %q, release its devices, and forfeit its remaining %s of credit? [y/N] ", name, forfeited)
+	}
 
 	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 

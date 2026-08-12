@@ -74,9 +74,9 @@ Each option needs a published release.
     ./superstack
     ```
 
-[Nix](https://nixos.org) users need no Go install: `nix develop` enters the
-dev shell, and with [direnv](https://direnv.net) hooked into your shell,
-`direnv allow` run once in the checkout loads it automatically from then on.
+[Nix](https://nixos.org) users: `nix develop` enters the dev shell, and with
+[direnv](https://direnv.net) hooked into your shell, `direnv allow` run once
+in the checkout loads it automatically from then on.
 
 ## Release setup
 
@@ -116,7 +116,7 @@ Do everything below once.
     git push -u origin version-0.1.0
     ```
 
-1. Merging creates a new commit, and the tag has to point at that one:
+1. Tag the new commit that merging created:
 
     ```sh
     git checkout main && git pull
