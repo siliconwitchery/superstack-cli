@@ -57,6 +57,10 @@ func TestFleetDelete(t *testing.T) {
 				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
 			})
 
+			mux.HandleFunc("GET /balance", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[{"fleet":3,"balance":"0","currency":"eur"}]`)
+			})
+
 			mux.HandleFunc("DELETE /fleets/{id}", func(w http.ResponseWriter, r *http.Request) {
 				deletedPath = r.URL.Path
 
@@ -81,6 +85,94 @@ func TestFleetDelete(t *testing.T) {
 				t.Errorf("the server saw %q deleted although the confirmation was declined", deletedPath)
 			}
 		})
+	}
+}
+
+func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
+	tests := []struct {
+		name       string
+		balance    string
+		wantPrompt string
+		wantAbsent string
+	}{
+		{
+			name:       "remaining credit is stated",
+			balance:    `[{"fleet":3,"balance":"12.340000","currency":"eur"}]`,
+			wantPrompt: "forfeit its remaining €12.34 of credit",
+		},
+		{
+			name:       "an empty balance stays quiet",
+			balance:    `[{"fleet":3,"balance":"0","currency":"eur"}]`,
+			wantAbsent: "forfeit",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
+			})
+
+			mux.HandleFunc("GET /balance", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, test.balance)
+			})
+
+			loggedInTestServer(t, mux)
+
+			answerOnStdin(t, "n\n")
+
+			printed, err := captureStdout(t, func() error {
+				return FleetDelete([]string{"3"})
+			})
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if test.wantPrompt != "" && !strings.Contains(printed, test.wantPrompt) {
+				t.Errorf("the prompt %q does not state %q", printed, test.wantPrompt)
+			}
+
+			if test.wantAbsent != "" && strings.Contains(printed, test.wantAbsent) {
+				t.Errorf("the prompt %q mentions %q although nothing is forfeited", printed, test.wantAbsent)
+			}
+		})
+	}
+}
+
+func TestFleetDeleteRefusesWhenTheBalanceIsUnknown(t *testing.T) {
+	deletedPath := ""
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
+	})
+
+	mux.HandleFunc("GET /balance", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "the server could not read the balances", http.StatusServiceUnavailable)
+	})
+
+	mux.HandleFunc("DELETE /fleets/{id}", func(w http.ResponseWriter, r *http.Request) {
+		deletedPath = r.URL.Path
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	loggedInTestServer(t, mux)
+
+	answerOnStdin(t, "y\n")
+
+	err := FleetDelete([]string{"3"})
+
+	if err == nil || !strings.Contains(err.Error(), "could not read the balances") {
+		t.Fatalf("error = %v, want the server's balance refusal", err)
+	}
+
+	if deletedPath != "" {
+		t.Errorf("the server saw %q deleted although the credit could not be stated", deletedPath)
 	}
 }
 

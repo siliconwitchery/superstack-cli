@@ -86,8 +86,8 @@ var sections = []section{
 	{
 		title: "Account",
 		commands: []command{
-			{name: "account balance", arguments: "[fleet_id]", summary: "Show the credit left on your fleets"},
-			{name: "account topup", arguments: "<fleet_id>", summary: "Add credit to a fleet"},
+			{name: "account balance", arguments: "[fleet_id]", summary: "Show the credit left on your fleets", run: commands.AccountBalance},
+			{name: "account topup", arguments: "<fleet_id>", summary: "Add credit to a fleet", run: commands.AccountTopup},
 			{name: "account delete", summary: "Delete your account entirely"},
 		},
 	},
