@@ -14,13 +14,17 @@ func TestResolve(t *testing.T) {
 		found     bool
 	}{
 		{arguments: []string{"login"}, name: "login", rest: []string{}, found: true},
-		{arguments: []string{"devices"}, name: "devices", rest: []string{}, found: true},
-		{arguments: []string{"claim", "354820091234567", "sensor-01"}, name: "claim", rest: []string{"354820091234567", "sensor-01"}, found: true},
+		{arguments: []string{"device", "list"}, name: "device list", rest: []string{}, found: true},
+		{arguments: []string{"device", "claim", "354820091234567", "sensor-01"}, name: "device claim", rest: []string{"354820091234567", "sensor-01"}, found: true},
 		{arguments: []string{"fleet", "create", "thermostats"}, name: "fleet create", rest: []string{"thermostats"}, found: true},
 		{arguments: []string{"member", "add", "someone@example.com"}, name: "member add", rest: []string{"someone@example.com"}, found: true},
+		{arguments: []string{"key", "create", "42", "production"}, name: "key create", rest: []string{"42", "production"}, found: true},
 		{arguments: []string{"upload", "./main.lua", "--device", "sensor-01"}, name: "upload", rest: []string{"./main.lua", "--device", "sensor-01"}, found: true},
 		{arguments: []string{"fleet"}, found: false},
 		{arguments: []string{"member"}, found: false},
+		{arguments: []string{"device"}, found: false},
+		{arguments: []string{"key"}, found: false},
+		{arguments: []string{"account"}, found: false},
 		{arguments: []string{"deploy"}, found: false},
 		{arguments: []string{}, found: false},
 	}

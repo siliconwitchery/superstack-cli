@@ -76,11 +76,13 @@ func MemberList(arguments []string) error {
 		return err
 	}
 
-	emailWidth := len(people.Owner)
+	emailWidth := max(len("EMAIL"), len(people.Owner))
 
 	for _, email := range people.Members {
 		emailWidth = max(emailWidth, len(email))
 	}
+
+	fmt.Printf("%-*s  %s\n", emailWidth, "EMAIL", "ROLE")
 
 	fmt.Printf("%-*s  owner\n", emailWidth, people.Owner)
 

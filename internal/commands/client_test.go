@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +10,34 @@ import (
 	"strings"
 	"testing"
 )
+
+func captureStdout(t *testing.T, run func() error) (string, error) {
+	t.Helper()
+
+	readEnd, writeEnd, err := os.Pipe()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := os.Stdout
+
+	os.Stdout = writeEnd
+
+	runError := run()
+
+	os.Stdout = stdout
+
+	writeEnd.Close()
+
+	printed, err := io.ReadAll(readEnd)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(printed), runError
+}
 
 func isolateKeyStorage(t *testing.T) string {
 	t.Helper()
@@ -49,7 +78,9 @@ func loggedInTestServer(t *testing.T, handler http.Handler) {
 
 	t.Cleanup(server.Close)
 
-	t.Setenv("SUPERSTACK_API", server.URL)
+	chosenApiBase = server.URL
+
+	t.Cleanup(func() { chosenApiBase = "" })
 }
 
 func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {
@@ -187,11 +218,10 @@ func TestTakeServerFlag(t *testing.T) {
 	}
 }
 
-func TestApiRequestBasePrecedence(t *testing.T) {
+func TestApiRequestBase(t *testing.T) {
 	tests := []struct {
 		name       string
 		chosenBase string
-		envBase    string
 		wantUrl    string
 	}{
 		{
@@ -199,14 +229,8 @@ func TestApiRequestBasePrecedence(t *testing.T) {
 			wantUrl: defaultApiBase + "/login",
 		},
 		{
-			name:    "the environment overrides the default",
-			envBase: "http://localhost:7777",
-			wantUrl: "http://localhost:7777/login",
-		},
-		{
-			name:       "the flag overrides the environment",
+			name:       "the flag overrides the default",
 			chosenBase: "http://localhost:8888",
-			envBase:    "http://localhost:7777",
 			wantUrl:    "http://localhost:8888/login",
 		},
 	}
@@ -216,8 +240,6 @@ func TestApiRequestBasePrecedence(t *testing.T) {
 			chosenApiBase = test.chosenBase
 
 			t.Cleanup(func() { chosenApiBase = "" })
-
-			t.Setenv("SUPERSTACK_API", test.envBase)
 
 			request, err := apiRequest(http.MethodGet, "/login", nil)
 
@@ -241,7 +263,9 @@ func TestCheckServer(t *testing.T) {
 
 	defer reachable.Close()
 
-	t.Setenv("SUPERSTACK_API", reachable.URL)
+	chosenApiBase = reachable.URL
+
+	t.Cleanup(func() { chosenApiBase = "" })
 
 	err := CheckServer()
 
@@ -253,7 +277,7 @@ func TestCheckServer(t *testing.T) {
 
 	unreachable.Close()
 
-	t.Setenv("SUPERSTACK_API", unreachable.URL)
+	chosenApiBase = unreachable.URL
 
 	err = CheckServer()
 

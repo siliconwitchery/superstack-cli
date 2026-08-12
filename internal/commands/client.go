@@ -78,10 +78,6 @@ func apiRequest(method string, path string, body io.Reader) (*http.Request, erro
 	base := chosenApiBase
 
 	if base == "" {
-		base = os.Getenv("SUPERSTACK_API")
-	}
-
-	if base == "" {
 		base = defaultApiBase
 	}
 

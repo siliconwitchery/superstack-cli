@@ -106,8 +106,7 @@ server base URL, the stored key location, the request builder that stamps the
 CLI version into User-Agent for the server's version negotiation, the
 reachability check `main` runs before dispatching any command that talks to
 the server, and the hidden `--server <url>` flag development uses to aim a
-run at another server. The flag is deliberately absent from the help and wins
-over `SUPERSTACK_API`.
+run at another server. The flag is deliberately absent from the help.
 
 Targets are positional. A fleet is named by the id `fleet list` shows, a
 device by its IMEI, and a verb that can act on either takes one argument

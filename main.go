@@ -9,7 +9,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/commands"
 )
 
-const version = "0.0.2"
+const version = "0.0.3"
 
 type command struct {
 	name      string
@@ -27,7 +27,7 @@ var sections = []section{
 	{
 		title: "Getting started",
 		commands: []command{
-			{name: "login", arguments: "<provider>", summary: "Log in with the selected provider", run: commands.Login},
+			{name: "login", arguments: "<github|gitlab>", summary: "Log in with the selected provider", run: commands.Login},
 			{name: "logout", summary: "Log out of your account", run: commands.Logout},
 		},
 	},
@@ -42,23 +42,15 @@ var sections = []section{
 		},
 	},
 	{
-		title: "People",
-		commands: []command{
-			{name: "member add", arguments: "<email> <fleet_id>", summary: "Give someone access to a fleet", run: commands.MemberAdd},
-			{name: "member list", arguments: "<fleet_id>", summary: "List the people who can reach a fleet", run: commands.MemberList},
-			{name: "member remove", arguments: "<email> <fleet_id>", summary: "Take away someone's access", run: commands.MemberRemove},
-		},
-	},
-	{
 		title: "Devices",
 		commands: []command{
-			{name: "claim", arguments: "<imei> <fleet_id> [name]", summary: "Claim a device into a fleet, then press its button"},
-			{name: "devices", arguments: "[fleet_id]", summary: "List devices, their state, and when they were last seen"},
-			{name: "rename", arguments: "<imei> <new_name>", summary: "Rename a device"},
-			{name: "release", arguments: "<imei>", summary: "Wipe a device and hand it back"},
-			{name: "start", arguments: "<imei>", summary: "Run the code on the target"},
-			{name: "stop", arguments: "<imei>", summary: "Halt the code on the target"},
-			{name: "restart", arguments: "<imei>", summary: "Restart the code on the target"},
+			{name: "device claim", arguments: "<imei> <fleet_id> [name]", summary: "Claim a device into a fleet, then press its button"},
+			{name: "device list", arguments: "[fleet_id]", summary: "List devices, their state, and when they were last seen"},
+			{name: "device rename", arguments: "<imei> <new_name>", summary: "Rename a device"},
+			{name: "device release", arguments: "<imei>", summary: "Unpair a device from its fleet and factory reset it"},
+			{name: "device start", arguments: "<imei>", summary: "Run the code on the target"},
+			{name: "device stop", arguments: "<imei>", summary: "Halt the code on the target"},
+			{name: "device restart", arguments: "<imei>", summary: "Restart the code on the target"},
 		},
 	},
 	{
@@ -70,18 +62,33 @@ var sections = []section{
 		},
 	},
 	{
-		title: "Data",
+		title: "Logs",
 		commands: []command{
-			{name: "tail", arguments: "<imei|fleet_id> [--log-file <file>]", summary: "Stream events and logs as they arrive"},
-			{name: "send", arguments: "<imei|fleet_id> -m <message>", summary: "Queue a message for the target to collect"},
+			{name: "tail", arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", summary: "Stream the target's log as it arrives"},
+		},
+	},
+	{
+		title: "People",
+		commands: []command{
+			{name: "member add", arguments: "<email> <fleet_id>", summary: "Give someone access to a fleet", run: commands.MemberAdd},
+			{name: "member list", arguments: "<fleet_id>", summary: "List the people who can reach a fleet", run: commands.MemberList},
+			{name: "member remove", arguments: "<email> <fleet_id>", summary: "Take away someone's access", run: commands.MemberRemove},
+		},
+	},
+	{
+		title: "Keys",
+		commands: []command{
+			{name: "key create", arguments: "<fleet_id> <label>", summary: "Create a key for sending data to a fleet", run: commands.KeyCreate},
+			{name: "key list", arguments: "[fleet_id]", summary: "List the keys that can reach your fleets", run: commands.KeyList},
+			{name: "key revoke", arguments: "<key_id>", summary: "Stop a key from reaching its fleet", run: commands.KeyRevoke},
 		},
 	},
 	{
 		title: "Account",
 		commands: []command{
-			{name: "balance", summary: "Show the credit left on your account"},
-			{name: "topup", summary: "Add credit"},
-			{name: "billing", summary: "Open your billing portal"},
+			{name: "account balance", arguments: "[fleet_id]", summary: "Show the credit left on your fleets"},
+			{name: "account topup", arguments: "<fleet_id>", summary: "Add credit to a fleet"},
+			{name: "account delete", summary: "Delete your account entirely"},
 		},
 	},
 	{
@@ -167,9 +174,6 @@ func printHelp(writer io.Writer) {
 	fmt.Fprint(writer, `
 Flags
   --json  Print machine-readable output
-
-Environment
-  SUPERSTACK_API  Talk to this server instead of the production one
 `)
 }
 

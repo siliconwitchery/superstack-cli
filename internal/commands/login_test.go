@@ -152,7 +152,9 @@ func fakeSuperstack(t *testing.T) {
 
 	t.Cleanup(server.Close)
 
-	t.Setenv("SUPERSTACK_API", server.URL)
+	chosenApiBase = server.URL
+
+	t.Cleanup(func() { chosenApiBase = "" })
 }
 
 func TestLogin(t *testing.T) {
@@ -353,7 +355,9 @@ func TestLoginProviderNotOffered(t *testing.T) {
 
 	t.Cleanup(server.Close)
 
-	t.Setenv("SUPERSTACK_API", server.URL)
+	chosenApiBase = server.URL
+
+	t.Cleanup(func() { chosenApiBase = "" })
 
 	err := Login([]string{"gitlab"})
 
