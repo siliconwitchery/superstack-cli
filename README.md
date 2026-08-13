@@ -111,12 +111,33 @@ Do everything below once.
 
 ## Releasing
 
-1. Change `version` in `main.go`, then open and merge a release pull request.
-
-1. Tag the commit that merging created:
+1. Create `dev` fresh from `main`:
 
     ```sh
-    git switch main && git pull
+    git fetch origin
+    git switch -C dev origin/main
+    ```
+
+1. Change `version` in `main.go`, run the checks, commit, and push:
+
+    ```sh
+    CGO_ENABLED=0 go vet ./...
+    CGO_ENABLED=0 go test ./...
+    git diff --check
+    git add main.go
+    git commit -m "Version <version>"
+    git push -u origin dev
+    ```
+
+1. Open the `dev` pull request, review it, and merge it with squash.
+
+1. Return to `main`, remove the stale branch, and tag the commit that merging
+   created:
+
+    ```sh
+    git switch main
+    git pull --ff-only
+    git branch -D dev
     tag="v$(sed -n 's/^const version = "\(.*\)"$/\1/p' main.go)"
     git tag "$tag" && git push origin "$tag"
     ```
