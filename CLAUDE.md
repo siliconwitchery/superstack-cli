@@ -82,10 +82,10 @@ General and meant to be reused verbatim across projects.
 - Development happens on `dev` in both repositories, created fresh from `main`
   at the start of every cycle and never resumed: merging squashes the branch
   and deletes it, so any local copy left behind is permanently diverged.
-- The CLI version moves one step per release, never once per cycle. It is the
-  version the next release will carry, so it is bumped in the first pull
-  request after a release ships and left alone until then; the server's
-  minimum-version gate matches it exactly.
+- The CLI version changes only in a release pull request. The server's minimum
+  version is an independent compatibility floor, not the current CLI version;
+  raise it only for an incompatible API change, after the required CLI release
+  is available through its package channels.
 
 ## Development cycle
 
@@ -100,28 +100,24 @@ Raj owns steps 1, 5 and 7; the rest happen here.
    permanently diverged, and its next pull request conflicts on every line it
    touches.
 3. **Work, then iterate on the feedback.**
-4. **Bump the version only if the last one shipped, then open the pull
-   request.** The const is the version the next release will carry, so if it
-   already sits above the latest release tag then the bump happened in an
-   earlier cycle, and repeating it is what makes the number run away from
-   what has actually shipped. The server's gate moves with it, in the same
-   cycle.
+4. **Open the pull request.** Product work does not change the CLI version or
+   the server's minimum-version gate. If an incompatible API change needs a
+   higher floor, keep the server compatible until the release in step 8 is
+   installable, then raise the gate in a server pull request.
 5. **Raj reviews and merges on GitHub.** Squash only.
 6. **Return to `main`:** `git switch main`, `git pull`, `git branch -D dev`,
    so nothing stale is left to resume.
 7. **Raj may ask for a release.** A merged cycle is not automatically one.
-8. **Cut the release, the CLI first, always.** Tag and publish the CLI, let
-   the package channels catch up, then tag the server. A gate ahead of the
-   newest installable CLI answers 426 to every existing client on every
-   route, login included, so nobody can log in to upgrade out of it.
+8. **Cut releases independently.** For the CLI, open and merge a release pull
+   request that changes its version, then tag that commit. A server-only
+   release needs no CLI release. For an incompatible API change, publish the
+   compatible CLI first, let its package channels catch up, and only then
+   merge and deploy the higher server gate.
 
-The version invariant does not depend on anyone remembering it: the CLI's
-`build` check refuses a version more than one step past the latest release,
-and the server's production deploy refuses a gate the published CLI has not
-caught up with. The branch invariant has no such check. It rests on step 2's
-`-C`, which resets a leftover `dev` onto `origin/main` rather than resuming
-it, and on both repositories being set to squash-only merges with
-Automatically delete head branches enabled.
+The production deploy refuses a gate ahead of the newest published CLI. The
+branch invariant rests on step 2's `-C`, which resets a leftover `dev` onto
+`origin/main` rather than resuming it, and on both repositories being set to
+squash-only merges with Automatically delete head branches enabled.
 
 ## Architecture
 
@@ -155,13 +151,11 @@ fetch the fleet-reading commands share.
 
 ## Releases
 
-The version lives in one place, `version` in `main.go`, and by the time a
-release is cut it already carries the number being tagged: it was bumped in
-the first pull request after the previous release shipped, not here. Nothing injects the version at
-build time, because `-ldflags -X` cannot write to a Go const; the release
-workflow instead refuses to build when the tag and the const disagree, and
-`build` refuses a const that has drifted more than one step past the latest
-release tag.
+The version lives in one place, `version` in `main.go`. Change it in a release
+pull request, then tag the commit that merges it. Product pull requests leave
+it alone. Nothing injects the version at build time, because `-ldflags -X`
+cannot write to a Go const; the release workflow refuses to build when the tag
+and the const disagree.
 
 The workflow also refuses to build a tag that does not sit on `main`. GitHub
 rulesets cannot express that, because a tag rule can restrict who creates a

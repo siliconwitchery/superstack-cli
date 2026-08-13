@@ -9,7 +9,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/commands"
 )
 
-const version = "0.0.3"
+const version = "0.0.2"
 
 type command struct {
 	name      string

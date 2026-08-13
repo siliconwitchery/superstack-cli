@@ -111,7 +111,9 @@ Do everything below once.
 
 ## Releasing
 
-1. Tag `main` with the version already in `main.go`:
+1. Change `version` in `main.go`, then open and merge a release pull request.
+
+1. Tag the commit that merging created:
 
     ```sh
     git switch main && git pull
