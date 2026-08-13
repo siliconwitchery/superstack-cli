@@ -138,9 +138,13 @@ func Login(arguments []string) error {
 	fmt.Println("Press enter to open the browser.")
 
 	// The read sits in a goroutine so an unpressed key never stalls the
-	// poll: the code may just as well be entered on another device.
+	// poll: the code may just as well be entered on another device. The
+	// stream is captured here, because the goroutine outlives the read and
+	// must not touch os.Stdin once something else may have replaced it.
+	prompt := os.Stdin
+
 	go func() {
-		_, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		_, err := bufio.NewReader(prompt).ReadString('\n')
 
 		if err == nil {
 			openBrowser(enterAt)

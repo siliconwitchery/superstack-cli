@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -47,7 +48,9 @@ func TestResolve(t *testing.T) {
 			t.Errorf("resolve(%q) name = %q, want %q", test.arguments, entry.name, test.name)
 		}
 
-		if strings.Join(rest, " ") != strings.Join(test.rest, " ") {
+		// Compared element by element, not joined: joining would accept a
+		// resolve that collapsed every argument into one string
+		if !slices.Equal(rest, test.rest) {
 			t.Errorf("resolve(%q) rest = %q, want %q", test.arguments, rest, test.rest)
 		}
 	}
@@ -75,6 +78,45 @@ func TestCommandTable(t *testing.T) {
 
 			seen[entry.name] = true
 		}
+	}
+}
+
+func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
+	// A command with no run reports that it is not implemented yet, so listing
+	// them here is what stops a built one silently losing its wiring. version
+	// and help are answered by main's own switch rather than by a run.
+	planned := map[string]bool{
+		"device claim":   true,
+		"device list":    true,
+		"device rename":  true,
+		"device release": true,
+		"device start":   true,
+		"device stop":    true,
+		"device restart": true,
+		"upload":         true,
+		"download":       true,
+		"dev":            true,
+		"tail":           true,
+		"version":        true,
+		"help":           true,
+	}
+
+	for _, section := range sections {
+		for _, entry := range section.commands {
+			switch {
+			case entry.run == nil && !planned[entry.name]:
+				t.Errorf("%q has no run, so it reports itself unimplemented", entry.name)
+
+			case entry.run != nil && planned[entry.name]:
+				t.Errorf("%q is implemented now, so take it off the planned list", entry.name)
+			}
+
+			delete(planned, entry.name)
+		}
+	}
+
+	for name := range planned {
+		t.Errorf("%q is on the planned list but not in the table", name)
 	}
 }
 

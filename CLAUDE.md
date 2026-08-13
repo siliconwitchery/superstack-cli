@@ -13,8 +13,8 @@ the entire git history ships.
 `~/projects/superstack-server` (github.com/siliconwitchery/superstack-server) and
 owns the JSON API this binary speaks. A change on either side of the wire
 usually implies one on the other, so read its CLAUDE.md before changing
-anything that crosses it. The two files share the coding principles below
-verbatim; a change to one belongs in both.
+anything that crosses it. The two files share the coding principles and the
+development cycle below verbatim; a change to one belongs in both.
 
 ## Coding principles
 
@@ -79,11 +79,45 @@ General and meant to be reused verbatim across projects.
   too, so neither reaches for a C toolchain that need not exist.
 - Keep the dependency set small: nothing a distribution's packager would balk
   at.
-- Development happens on the `dev` branch of both repositories; check the
-  current branch before the first edit, and never resume a branch that has
-  been merged and deleted.
-- During development the CLI version is the next 0.0.x above the latest
-  release tag, and the server's minimum-version gate matches it exactly.
+- Development happens on `dev` in both repositories, created fresh from `main`
+  at the start of every cycle and never resumed: merging squashes the branch
+  and deletes it, so any local copy left behind is permanently diverged.
+- The CLI version changes only in a release pull request. The server's minimum
+  version is an independent compatibility floor, not the current CLI version;
+  raise it only for an incompatible API change, after the required CLI release
+  is available through its package channels.
+
+## Development cycle
+
+One request, one branch, one pull request, and the branch never outlives it.
+Raj owns steps 1, 5 and 7; the rest happen here.
+
+1. **Raj asks for something.** A cycle starts from a request, never from
+   picking up where the last one stopped.
+2. **Create `dev` fresh from `main`:** `git fetch origin`, then
+   `git switch -C dev origin/main`. Never resume an existing `dev`. Merging
+   squashes the branch and deletes it, so a local copy left behind is
+   permanently diverged, and its next pull request conflicts on every line it
+   touches.
+3. **Work, then iterate on the feedback.**
+4. **Open the pull request.** Product work does not change the CLI version or
+   the server's minimum-version gate. If an incompatible API change needs a
+   higher floor, keep the server compatible until the release in step 8 is
+   installable, then raise the gate in a server pull request.
+5. **Raj reviews and merges on GitHub.** Squash only.
+6. **Return to `main`:** `git switch main`, `git pull`, `git branch -D dev`,
+   so nothing stale is left to resume.
+7. **Raj may ask for a release.** A merged cycle is not automatically one.
+8. **Cut releases independently.** For the CLI, open and merge a release pull
+   request that changes its version, then tag that commit. A server-only
+   release needs no CLI release. For an incompatible API change, publish the
+   compatible CLI first, let its package channels catch up, and only then
+   merge and deploy the higher server gate.
+
+The production deploy refuses a gate ahead of the newest published CLI. The
+branch invariant rests on step 2's `-C`, which resets a leftover `dev` onto
+`origin/main` rather than resuming it, and on both repositories being set to
+squash-only merges with Automatically delete head branches enabled.
 
 ## Architecture
 
@@ -117,10 +151,11 @@ fetch the fleet-reading commands share.
 
 ## Releases
 
-The version lives in one place, `version` in `main.go`. Bump it, then tag the
-commit that bumped it. Nothing injects the version at build time, because
-`-ldflags -X` cannot write to a Go const; the release workflow instead refuses
-to build when the tag and the const disagree.
+The version lives in one place, `version` in `main.go`. Change it in a release
+pull request, then tag the commit that merges it. Product pull requests leave
+it alone. Nothing injects the version at build time, because `-ldflags -X`
+cannot write to a Go const; the release workflow refuses to build when the tag
+and the const disagree.
 
 The workflow also refuses to build a tag that does not sit on `main`. GitHub
 rulesets cannot express that, because a tag rule can restrict who creates a

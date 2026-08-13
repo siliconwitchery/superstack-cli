@@ -9,23 +9,30 @@ import (
 
 func TestFleetList(t *testing.T) {
 	tests := []struct {
-		name      string
-		arguments []string
-		fleets    string
-		wantError string
+		name       string
+		arguments  []string
+		fleets     string
+		wantShown  []string
+		wantAbsent []string
+		wantExact  string
+		wantError  string
 	}{
 		{
-			name:   "some fleets",
-			fleets: `[{"id":1,"name":"field trial","owner":true},{"id":2,"name":"rooftop","owner":false}]`,
+			name:      "some fleets",
+			fleets:    `[{"id":1,"name":"field trial","owner":true},{"id":2,"name":"rooftop","owner":false}]`,
+			wantShown: []string{"ID", "NAME", "ROLE", "field trial", "owner", "rooftop", "member"},
 		},
 		{
-			name:   "no fleets",
-			fleets: `[]`,
+			name:       "no fleets",
+			fleets:     `[]`,
+			wantShown:  []string{"No fleets yet"},
+			wantAbsent: []string{"ID", "NAME"},
 		},
 		{
 			name:      "machine-readable output",
 			arguments: []string{"--json"},
 			fleets:    `[{"id":1,"name":"field trial","owner":true}]`,
+			wantExact: `[{"id":1,"name":"field trial","owner":true}]` + "\n",
 		},
 		{
 			name:      "an unknown argument",
@@ -44,7 +51,9 @@ func TestFleetList(t *testing.T) {
 
 			loggedInTestServer(t, mux)
 
-			err := FleetList(test.arguments)
+			printed, err := captureStdout(t, func() error {
+				return FleetList(test.arguments)
+			})
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
@@ -56,6 +65,22 @@ func TestFleetList(t *testing.T) {
 
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			if test.wantExact != "" && printed != test.wantExact {
+				t.Errorf("the output is %q, want exactly %q", printed, test.wantExact)
+			}
+
+			for _, want := range test.wantShown {
+				if !strings.Contains(printed, want) {
+					t.Errorf("the output %q does not show %q", printed, want)
+				}
+			}
+
+			for _, absent := range test.wantAbsent {
+				if strings.Contains(printed, absent) {
+					t.Errorf("the output %q shows %q although there is nothing to list", printed, absent)
+				}
 			}
 		})
 	}
