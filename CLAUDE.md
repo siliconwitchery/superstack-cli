@@ -13,8 +13,8 @@ the entire git history ships.
 `~/projects/superstack-server` (github.com/siliconwitchery/superstack-server) and
 owns the JSON API this binary speaks. A change on either side of the wire
 usually implies one on the other, so read its CLAUDE.md before changing
-anything that crosses it. The two files share the coding principles below
-verbatim; a change to one belongs in both.
+anything that crosses it. The two files share the coding principles and the
+development cycle below verbatim; a change to one belongs in both.
 
 ## Coding principles
 
@@ -79,11 +79,49 @@ General and meant to be reused verbatim across projects.
   too, so neither reaches for a C toolchain that need not exist.
 - Keep the dependency set small: nothing a distribution's packager would balk
   at.
-- Development happens on the `dev` branch of both repositories; check the
-  current branch before the first edit, and never resume a branch that has
-  been merged and deleted.
-- During development the CLI version is the next 0.0.x above the latest
-  release tag, and the server's minimum-version gate matches it exactly.
+- Development happens on `dev` in both repositories, created fresh from `main`
+  at the start of every cycle and never resumed: merging squashes the branch
+  and deletes it, so any local copy left behind is permanently diverged.
+- The CLI version moves one step per release, never once per cycle. It is the
+  version the next release will carry, so it is bumped in the first pull
+  request after a release ships and left alone until then; the server's
+  minimum-version gate matches it exactly.
+
+## Development cycle
+
+One request, one branch, one pull request, and the branch never outlives it.
+Raj owns steps 1, 5 and 7; the rest happen here.
+
+1. **Raj asks for something.** A cycle starts from a request, never from
+   picking up where the last one stopped.
+2. **Create `dev` fresh from `main`:** `git fetch origin`, then
+   `git switch -C dev origin/main`. Never resume an existing `dev`. Merging
+   squashes the branch and deletes it, so a local copy left behind is
+   permanently diverged, and its next pull request conflicts on every line it
+   touches.
+3. **Work, then iterate on the feedback.**
+4. **Bump the version only if the last one shipped, then open the pull
+   request.** The const is the version the next release will carry, so if it
+   already sits above the latest release tag then the bump happened in an
+   earlier cycle, and repeating it is what makes the number run away from
+   what has actually shipped. The server's gate moves with it, in the same
+   cycle.
+5. **Raj reviews and merges on GitHub.** Squash only.
+6. **Return to `main`:** `git switch main`, `git pull`, `git branch -D dev`,
+   so nothing stale is left to resume.
+7. **Raj may ask for a release.** A merged cycle is not automatically one.
+8. **Cut the release, the CLI first, always.** Tag and publish the CLI, let
+   the package channels catch up, then tag the server. A gate ahead of the
+   newest installable CLI answers 426 to every existing client on every
+   route, login included, so nobody can log in to upgrade out of it.
+
+The version invariant does not depend on anyone remembering it: the CLI's
+`build` check refuses a version more than one step past the latest release,
+and the server's production deploy refuses a gate the published CLI has not
+caught up with. The branch invariant has no such check. It rests on step 2's
+`-C`, which resets a leftover `dev` onto `origin/main` rather than resuming
+it, and on both repositories being set to squash-only merges with
+Automatically delete head branches enabled.
 
 ## Architecture
 
@@ -117,10 +155,13 @@ fetch the fleet-reading commands share.
 
 ## Releases
 
-The version lives in one place, `version` in `main.go`. Bump it, then tag the
-commit that bumped it. Nothing injects the version at build time, because
-`-ldflags -X` cannot write to a Go const; the release workflow instead refuses
-to build when the tag and the const disagree.
+The version lives in one place, `version` in `main.go`, and by the time a
+release is cut it already carries the number being tagged: it was bumped in
+the first pull request after the previous release shipped, not here. Nothing injects the version at
+build time, because `-ldflags -X` cannot write to a Go const; the release
+workflow instead refuses to build when the tag and the const disagree, and
+`build` refuses a const that has drifted more than one step past the latest
+release tag.
 
 The workflow also refuses to build a tag that does not sit on `main`. GitHub
 rulesets cannot express that, because a tag rule can restrict who creates a

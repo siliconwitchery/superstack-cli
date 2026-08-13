@@ -104,26 +104,19 @@ Do everything below once.
 
 1. Add one ruleset (Settings > Rules > Rulesets) targeting the default branch:
    require a pull request with 0 approvals, require the `build` status check,
-   block force pushes, restrict deletions. Add a second targeting `v*` tags:
-   block force pushes, restrict deletions.
+   allowed merge method squash only, block force pushes, restrict deletions.
+   Add a second targeting `v*` tags: block force pushes, restrict deletions.
+
+1. Enable **Automatically delete head branches** (Settings > General).
 
 ## Releasing
 
-1. Bump `version` in `main.go`, then open and merge a pull request:
+1. Tag `main` with the version already in `main.go`:
 
     ```sh
-    git checkout -b version-0.1.0
-    git commit -am "Version 0.1.0"
-    git push -u origin version-0.1.0
-    ```
-
-1. Tag the new commit that merging created:
-
-    ```sh
-    git checkout main && git pull
-    grep '^const version' main.go
-    git tag v0.1.0
-    git push origin v0.1.0
+    git switch main && git pull
+    tag="v$(sed -n 's/^const version = "\(.*\)"$/\1/p' main.go)"
+    git tag "$tag" && git push origin "$tag"
     ```
 
 1. Write the release notes into the empty release body on GitHub, following the

@@ -51,6 +51,46 @@ jobs:
             exit 1
           fi
 
+      - name: Verify the version has not drifted past the latest release
+        run: |
+          declared=$(sed -n 's/^const version = "\(.*\)"$/\1/p' main.go)
+
+          # Prerelease tags are skipped, so "latest release" means the same
+          # here as it does to the server's deploy guard, which reads it from
+          # the releases API
+          latest=$(git tag -l 'v*' --sort=-v:refname | grep -v -- '-' | head -1)
+
+          if [ -z "$declared" ]; then
+            echo "could not read 'const version' from main.go"
+            exit 1
+          fi
+
+          if [ -z "$latest" ]; then
+            exit 0
+          fi
+
+          latest="${latest#v}"
+
+          declaredBase="${declared%%-*}"
+          latestBase="${latest%%-*}"
+
+          major="${latestBase%%.*}"
+          withoutMajor="${latestBase#*.}"
+          minor="${withoutMajor%%.*}"
+          patch="${withoutMajor#*.}"
+
+          for allowed in "$latestBase" "$major.$minor.$((patch + 1))" "$major.$((minor + 1)).0" "$((major + 1)).0.0"; do
+            if [ "$declaredBase" = "$allowed" ]; then
+              exit 0
+            fi
+          done
+
+          echo "main.go declares $declared, but the latest release is v$latest."
+          echo "The version moves one step per release, never once per cycle, so it is"
+          echo "one of: $latestBase (released, awaiting the next cycle),"
+          echo "$major.$minor.$((patch + 1)), $major.$((minor + 1)).0, or $((major + 1)).0.0"
+          exit 1
+
       - run: go vet ./...
 
       - run: go test ./...
