@@ -74,7 +74,18 @@ func loggedInTestServer(t *testing.T, handler http.Handler) {
 		t.Fatal(err)
 	}
 
-	server := httptest.NewServer(handler)
+	// Every command reaching a logged-in server must carry the stored key, so
+	// the fixture proves it once rather than each command remembering to
+	authorized := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer ssk_test" {
+			t.Errorf("%s %s carried authorization %q, want the stored key",
+				r.Method, r.URL.Path, r.Header.Get("Authorization"))
+		}
+
+		handler.ServeHTTP(w, r)
+	})
+
+	server := httptest.NewServer(authorized)
 
 	t.Cleanup(server.Close)
 
@@ -219,6 +230,12 @@ func TestTakeServerFlag(t *testing.T) {
 }
 
 func TestApiRequestBase(t *testing.T) {
+	previousVersion := CliVersion
+
+	CliVersion = "1.2.3"
+
+	t.Cleanup(func() { CliVersion = previousVersion })
+
 	tests := []struct {
 		name       string
 		chosenBase string
@@ -251,8 +268,10 @@ func TestApiRequestBase(t *testing.T) {
 				t.Errorf("url = %q, want %q", request.URL.String(), test.wantUrl)
 			}
 
-			if request.Header.Get("User-Agent") != "superstack/"+CliVersion {
-				t.Errorf("User-Agent = %q, want the CLI version", request.Header.Get("User-Agent"))
+			// Pinned to a literal, not to CliVersion: the server's gate parses
+			// this exact shape, so deriving it here would agree with any value
+			if request.Header.Get("User-Agent") != "superstack/1.2.3" {
+				t.Errorf("User-Agent = %q, want superstack/1.2.3", request.Header.Get("User-Agent"))
 			}
 		})
 	}

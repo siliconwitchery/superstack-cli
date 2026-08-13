@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -8,23 +9,51 @@ import (
 
 func TestKeyRevoke(t *testing.T) {
 	tests := []struct {
-		name      string
-		arguments []string
-		wantPath  string
-		refusal   string
-		wantError string
+		name        string
+		arguments   []string
+		answer      string
+		refusal     string
+		wantRevoked string
+		wantShown   string
+		wantError   string
 	}{
 		{
-			name:      "revoke a key",
-			arguments: []string{"3"},
-			wantPath:  "/keys/3",
+			name:        "revoke a key",
+			arguments:   []string{"3"},
+			answer:      "y\n",
+			wantRevoked: "/keys/3",
+			wantShown:   "production",
 		},
 		{
-			name:      "a key out of reach",
+			name:      "declined by default",
+			arguments: []string{"3"},
+			answer:    "\n",
+			wantShown: "Nothing revoked",
+		},
+		{
+			name:      "declined with n",
+			arguments: []string{"3"},
+			answer:    "n\n",
+			wantShown: "Nothing revoked",
+		},
+		{
+			name:      "closed input",
+			arguments: []string{"3"},
+			wantShown: "Nothing revoked",
+		},
+		{
+			name:        "the server refuses after the confirmation",
+			arguments:   []string{"3"},
+			answer:      "y\n",
+			refusal:     "no such key",
+			wantRevoked: "/keys/3",
+			wantError:   "the server said: no such key",
+		},
+		{
+			name:      "a key that is not yours",
 			arguments: []string{"9"},
-			wantPath:  "/keys/9",
-			refusal:   "no such key",
-			wantError: "the server said: no such key",
+			answer:    "y\n",
+			wantError: "no such key",
 		},
 		{
 			name:      "no key id",
@@ -45,12 +74,16 @@ func TestKeyRevoke(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			revokedPath := ""
+
 			mux := http.NewServeMux()
 
+			mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[{"id":3,"fleet":1,"label":"production","suffix":"a1b2c"}]`)
+			})
+
 			mux.HandleFunc("DELETE /keys/{id}", func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != test.wantPath {
-					t.Errorf("the request went to %s, want %s", r.URL.Path, test.wantPath)
-				}
+				revokedPath = r.URL.Path
 
 				if test.refusal != "" {
 					http.Error(w, test.refusal, http.StatusNotFound)
@@ -62,18 +95,26 @@ func TestKeyRevoke(t *testing.T) {
 
 			loggedInTestServer(t, mux)
 
-			err := KeyRevoke(test.arguments)
+			answerOnStdin(t, test.answer)
+
+			printed, err := captureStdout(t, func() error {
+				return KeyRevoke(test.arguments)
+			})
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
 					t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
 				}
-
-				return
+			} else if err != nil {
+				t.Fatal(err)
 			}
 
-			if err != nil {
-				t.Fatal(err)
+			if revokedPath != test.wantRevoked {
+				t.Errorf("the server saw %q revoked, want %q", revokedPath, test.wantRevoked)
+			}
+
+			if test.wantShown != "" && !strings.Contains(printed, test.wantShown) {
+				t.Errorf("the output %q does not show %q", printed, test.wantShown)
 			}
 		})
 	}

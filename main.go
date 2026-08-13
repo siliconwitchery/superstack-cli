@@ -9,7 +9,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/commands"
 )
 
-const version = "0.0.4"
+const version = "0.0.3"
 
 type command struct {
 	name      string
@@ -35,7 +35,7 @@ var sections = []section{
 		title: "Fleets",
 		commands: []command{
 			{name: "fleet create", arguments: "<name>", summary: "Create a fleet", run: commands.FleetCreate},
-			{name: "fleet list", summary: "List the fleets you can reach", run: commands.FleetList},
+			{name: "fleet list", arguments: "[--json]", summary: "List the fleets you can reach", run: commands.FleetList},
 			{name: "fleet rename", arguments: "<fleet_id> <new_name>", summary: "Rename a fleet", run: commands.FleetRename},
 			{name: "fleet transfer", arguments: "<fleet_id> <email>", summary: "Hand a fleet to a new owner", run: commands.FleetTransfer},
 			{name: "fleet delete", arguments: "<fleet_id>", summary: "Delete a fleet and release its devices", run: commands.FleetDelete},
@@ -71,7 +71,7 @@ var sections = []section{
 		title: "People",
 		commands: []command{
 			{name: "member add", arguments: "<email> <fleet_id>", summary: "Give someone access to a fleet", run: commands.MemberAdd},
-			{name: "member list", arguments: "<fleet_id>", summary: "List the people who can reach a fleet", run: commands.MemberList},
+			{name: "member list", arguments: "<fleet_id> [--json]", summary: "List the people who can reach a fleet", run: commands.MemberList},
 			{name: "member remove", arguments: "<email> <fleet_id>", summary: "Take away someone's access", run: commands.MemberRemove},
 		},
 	},
@@ -79,16 +79,16 @@ var sections = []section{
 		title: "Keys",
 		commands: []command{
 			{name: "key create", arguments: "<fleet_id> <label>", summary: "Create a key for sending data to a fleet", run: commands.KeyCreate},
-			{name: "key list", arguments: "[fleet_id]", summary: "List the keys that can reach your fleets", run: commands.KeyList},
+			{name: "key list", arguments: "[fleet_id] [--json]", summary: "List the keys that can reach your fleets", run: commands.KeyList},
 			{name: "key revoke", arguments: "<key_id>", summary: "Stop a key from reaching its fleet", run: commands.KeyRevoke},
 		},
 	},
 	{
 		title: "Account",
 		commands: []command{
-			{name: "account balance", arguments: "[fleet_id]", summary: "Show the credit left on your fleets", run: commands.AccountBalance},
+			{name: "account balance", arguments: "[fleet_id] [--json]", summary: "Show the credit left on your fleets", run: commands.AccountBalance},
 			{name: "account topup", arguments: "<fleet_id>", summary: "Add credit to a fleet", run: commands.AccountTopup},
-			{name: "account delete", summary: "Delete your account entirely"},
+			{name: "account delete", summary: "Delete your account entirely", run: commands.AccountDelete},
 		},
 	},
 	{
@@ -155,7 +155,7 @@ func printHelp(writer io.Writer) {
 	}
 
 	fmt.Fprintf(writer, "superstack %s\n\n", version)
-	fmt.Fprint(writer, "Usage: superstack <command> [arguments] [flags]\n")
+	fmt.Fprint(writer, "Usage: superstack <command> [arguments]\n")
 
 	for _, section := range sections {
 		fmt.Fprintf(writer, "\n%s\n", section.title)
@@ -170,11 +170,6 @@ func printHelp(writer io.Writer) {
 			fmt.Fprintf(writer, "  %-*s  %s\n", widest, signature, entry.summary)
 		}
 	}
-
-	fmt.Fprint(writer, `
-Flags
-  --json  Print machine-readable output
-`)
 }
 
 func main() {

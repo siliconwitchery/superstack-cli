@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -8,11 +9,18 @@ import (
 
 func TestMemberRemove(t *testing.T) {
 	tests := []struct {
-		name  string
-		email string
+		name        string
+		email       string
+		answer      string
+		wantRemoved bool
+		wantShown   string
 	}{
-		{"a plain address", "member@example.com"},
-		{"an address with a hash", "a#b@example.com"},
+		{name: "a plain address", email: "member@example.com", answer: "y\n", wantRemoved: true},
+		{name: "an address with a hash", email: "a#b@example.com", answer: "yes\n", wantRemoved: true},
+		{name: "the prompt names the fleet", email: "member@example.com", answer: "y\n", wantRemoved: true, wantShown: `access to "pilot"`},
+		{name: "declined by default", email: "member@example.com", answer: "\n", wantShown: "Nothing changed"},
+		{name: "declined with n", email: "member@example.com", answer: "n\n", wantShown: "Nothing changed"},
+		{name: "closed input", email: "member@example.com", wantShown: "Nothing changed"},
 	}
 
 	for _, test := range tests {
@@ -21,6 +29,10 @@ func TestMemberRemove(t *testing.T) {
 			removedEmail := ""
 
 			mux := http.NewServeMux()
+
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
+			})
 
 			mux.HandleFunc("DELETE /fleets/{id}/members/{email}", func(w http.ResponseWriter, r *http.Request) {
 				removedFleet = r.PathValue("id")
@@ -31,15 +43,27 @@ func TestMemberRemove(t *testing.T) {
 
 			loggedInTestServer(t, mux)
 
-			err := MemberRemove([]string{test.email, "3"})
+			answerOnStdin(t, test.answer)
+
+			printed, err := captureStdout(t, func() error {
+				return MemberRemove([]string{test.email, "3"})
+			})
 
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if removedFleet != "3" || removedEmail != test.email {
+			switch {
+			case test.wantRemoved && (removedFleet != "3" || removedEmail != test.email):
 				t.Errorf("the server saw %q removed from fleet %q, want %q from fleet %q",
 					removedEmail, removedFleet, test.email, "3")
+
+			case !test.wantRemoved && removedEmail != "":
+				t.Errorf("the server saw %q removed although the confirmation was declined", removedEmail)
+			}
+
+			if test.wantShown != "" && !strings.Contains(printed, test.wantShown) {
+				t.Errorf("the output %q does not show %q", printed, test.wantShown)
 			}
 		})
 	}

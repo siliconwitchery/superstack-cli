@@ -38,13 +38,22 @@ func TestFleetDelete(t *testing.T) {
 	tests := []struct {
 		name        string
 		answer      string
+		refusal     string
 		wantDeleted bool
+		wantError   string
 	}{
-		{"confirmed with y", "y\n", true},
-		{"confirmed with yes", "YES\n", true},
-		{"declined with n", "n\n", false},
-		{"declined by default", "\n", false},
-		{"closed input", "", false},
+		{name: "confirmed with y", answer: "y\n", wantDeleted: true},
+		{name: "confirmed with yes", answer: "YES\n", wantDeleted: true},
+		{name: "declined with n", answer: "n\n"},
+		{name: "declined by default", answer: "\n"},
+		{name: "closed input", answer: ""},
+		{
+			name:        "the server refuses after the confirmation",
+			answer:      "y\n",
+			refusal:     "only the fleet's owner can delete it",
+			wantDeleted: true,
+			wantError:   "only the fleet's owner can delete it",
+		},
 	}
 
 	for _, test := range tests {
@@ -64,6 +73,11 @@ func TestFleetDelete(t *testing.T) {
 			mux.HandleFunc("DELETE /fleets/{id}", func(w http.ResponseWriter, r *http.Request) {
 				deletedPath = r.URL.Path
 
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusForbidden)
+					return
+				}
+
 				w.WriteHeader(http.StatusNoContent)
 			})
 
@@ -71,9 +85,22 @@ func TestFleetDelete(t *testing.T) {
 
 			answerOnStdin(t, test.answer)
 
-			err := FleetDelete([]string{"3"})
+			printed, err := captureStdout(t, func() error {
+				return FleetDelete([]string{"3"})
+			})
 
-			if err != nil {
+			switch {
+			case test.wantError != "":
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
+				}
+
+				// A refused delete must never claim the fleet is gone
+				if strings.Contains(printed, "Deleted") {
+					t.Errorf("the output %q says the fleet was deleted although the server refused", printed)
+				}
+
+			case err != nil:
 				t.Fatal(err)
 			}
 

@@ -4,19 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strconv"
-	"strings"
 )
-
-type keyEntry struct {
-	Id     int64  `json:"id"`
-	Fleet  int64  `json:"fleet"`
-	Label  string `json:"label"`
-	Suffix string `json:"suffix"`
-}
 
 func KeyList(arguments []string) error {
 
@@ -67,29 +57,7 @@ func KeyList(arguments []string) error {
 		}
 	}
 
-	request, err := authenticatedRequest(http.MethodGet, "/keys", nil)
-
-	if err != nil {
-		return err
-	}
-
-	response, err := apiClient.Do(request)
-
-	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
-	}
-
-	fetched := []keyEntry{}
-
-	err = json.NewDecoder(response.Body).Decode(&fetched)
+	fetched, err := fetchKeys()
 
 	if err != nil {
 		return err

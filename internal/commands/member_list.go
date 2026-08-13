@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -60,11 +61,6 @@ func MemberList(arguments []string) error {
 		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(body)))
 	}
 
-	if jsonOutput {
-		fmt.Print(string(body))
-		return nil
-	}
-
 	people := struct {
 		Owner   string   `json:"owner"`
 		Members []string `json:"members"`
@@ -74,6 +70,10 @@ func MemberList(arguments []string) error {
 
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return json.NewEncoder(os.Stdout).Encode(people)
 	}
 
 	emailWidth := max(len("EMAIL"), len(people.Owner))
