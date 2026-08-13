@@ -90,7 +90,7 @@ General and meant to be reused verbatim across projects.
 ## Development cycle
 
 One request, one branch, one pull request, and the branch never outlives it.
-Raj owns steps 1, 5 and 7; the rest happen here.
+Raj owns steps 1, 5, 7 and 8; the rest happen here.
 
 1. **Raj asks for something.** A cycle starts from a request, never from
    picking up where the last one stopped.
