@@ -95,6 +95,7 @@ Do everything below once.
 1. Register at [aur.archlinux.org](https://aur.archlinux.org/register), then:
 
     ```sh
+    cd "$(mktemp -d)"
     ssh-keygen -t ed25519 -N "" -f aur_key
     cat aur_key.pub   # paste into SSH Public Key in your AUR account settings
     cat aur_key       # add as the Actions secret AUR_KEY
