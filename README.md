@@ -1,63 +1,52 @@
 # Superstack CLI
 
 `superstack` is the command line interface to Superstack: sign in, claim
-devices, push Lua code, and stream logs from your fleet. It is a
-single static binary talking to the Superstack server's JSON API. The server is
-a separate project; this repo is the CLI only. It is laid out as follows:
+devices, push Lua code, and stream logs from your fleet. It is a single static
+binary talking to the Superstack server's JSON API.
 
-```sh
-├── .envrc                 # Loads the Nix dev shell via direnv
-├── .github/dependabot.yml # Weekly action and module update PRs
-├── .github/workflows      # CI on pull requests, release on v* tags
-├── .gitignore
-├── .goreleaser.yaml       # Build matrix and every publishing target
-├── flake.lock             # Pins nixpkgs
-├── flake.nix              # The superstack package, and the dev shell
-├── go.mod
-├── internal
-│   └── commands           # One file per command, plus the shared server client
-├── LICENSE
-├── main.go                # Entry point, version constant, and the command table
-├── main_test.go
-└── README.md
-```
+<!-- Screenshot goes here -->
 
 ## Install
 
-Each option needs a published release.
-
-- **Homebrew:**
+- **macOS**, with [Homebrew](https://brew.sh):
 
     ```sh
-    brew install --cask siliconwitchery/tap/superstack
+    brew install --cask siliconwitchery/tap/superstack   # install
+    brew upgrade --cask superstack                       # update
     ```
 
-- **Scoop:**
+- **Windows**, with [Scoop](https://scoop.sh) and git:
 
     ```sh
     scoop bucket add siliconwitchery https://github.com/siliconwitchery/scoop-bucket
-    scoop install superstack
+    scoop install superstack                             # install
+    scoop update superstack                              # update
     ```
 
-- **Arch Linux:**
+- **Arch Linux**, from the AUR:
 
     ```sh
-    yay -S superstack-bin
+    yay -S superstack-bin                                # install and update
     ```
 
-- **Nix.** Not in nixpkgs yet.
+- **NixOS**, with [Nix](https://nixos.org) `nix-command` and `flakes` enabled:
 
     ```sh
-    nix profile install github:siliconwitchery/superstack-cli
+    nix profile install github:siliconwitchery/superstack-cli#superstack   # install
+    nix profile upgrade superstack                                         # update
     ```
 
 - **Any platform.** Download an archive from the
   [releases page](https://github.com/siliconwitchery/superstack-cli/releases),
-  unpack it, and move `superstack` onto your `PATH`.
+  unpack it, and move `superstack` onto your `PATH`. Repeat to update.
 
 ## Local development
 
-1. Install [Go](https://go.dev) 1.25 or newer.
+1. Install the toolchain:
+
+    - **Any platform:** [Go](https://go.dev) 1.25 or newer.
+    - **Nix:** `nix develop`, or `direnv allow` once with
+      [direnv](https://direnv.net) hooked into your shell.
 
 1. Clone the repository:
 
@@ -72,41 +61,6 @@ Each option needs a published release.
     CGO_ENABLED=0 go build -o superstack .
     ./superstack
     ```
-
-[Nix](https://nixos.org) users: `nix develop` enters the dev shell, and with
-[direnv](https://direnv.net) hooked into your shell, `direnv allow` run once
-in the checkout loads it automatically from then on.
-
-## Release setup
-
-Do everything below once.
-
-1. Create public repositories `siliconwitchery/homebrew-tap` and
-   `siliconwitchery/scoop-bucket`, each with a README.
-
-1. Add a fine-grained token (Settings > Developer settings > Personal access
-   tokens) as the Actions secret `TAP_GITHUB_TOKEN`:
-
-    - Resource owner: `siliconwitchery`
-    - Repository access: `homebrew-tap` and `scoop-bucket`
-    - Permissions: Contents, read and write
-
-1. Register at [aur.archlinux.org](https://aur.archlinux.org/register), then:
-
-    ```sh
-    cd "$(mktemp -d)"
-    ssh-keygen -t ed25519 -N "" -f aur_key
-    cat aur_key.pub   # paste into SSH Public Key in your AUR account settings
-    cat aur_key       # add as the Actions secret AUR_KEY
-    rm aur_key aur_key.pub
-    ```
-
-1. Add one ruleset (Settings > Rules > Rulesets) targeting the default branch:
-   require a pull request with 0 approvals, require the `build` status check,
-   allowed merge method squash only, block force pushes, restrict deletions.
-   Add a second targeting `v*` tags: block force pushes, restrict deletions.
-
-1. Enable **Automatically delete head branches** (Settings > General).
 
 ## Releasing
 
@@ -143,5 +97,5 @@ Do everything below once.
 
 1. Write the release notes into the empty release body on GitHub.
 
-A tag carrying a prerelease suffix, `v0.0.2-rc1`, publishes a GitHub prerelease
-and skips every package manager. Tags cannot be moved or deleted.
+A prerelease suffix, `v0.0.2-rc1`, skips every package manager. Tags cannot be
+moved or deleted.
