@@ -11,7 +11,6 @@ a separate project; this repo is the CLI only. It is laid out as follows:
 ├── .github/workflows      # CI on pull requests, release on v* tags
 ├── .gitignore
 ├── .goreleaser.yaml       # Build matrix and every publishing target
-├── CLAUDE.md              # Coding principles and architectural overview
 ├── flake.lock             # Pins nixpkgs
 ├── flake.nix              # The superstack package, and the dev shell
 ├── go.mod
@@ -142,8 +141,7 @@ Do everything below once.
     git tag "$tag" && git push origin "$tag"
     ```
 
-1. Write the release notes into the empty release body on GitHub, following the
-   shape in CLAUDE.md.
+1. Write the release notes into the empty release body on GitHub.
 
 A tag carrying a prerelease suffix, `v0.0.2-rc1`, publishes a GitHub prerelease
 and skips every package manager. Tags cannot be moved or deleted.
