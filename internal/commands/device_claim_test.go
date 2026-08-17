@@ -9,46 +9,81 @@ import (
 )
 
 func TestDeviceClaim(t *testing.T) {
-	claimedImei := ""
-	claimedName := ""
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
-	})
-	mux.HandleFunc("POST /fleets/{id}/devices", func(w http.ResponseWriter, r *http.Request) {
-		body := struct {
-			Imei string `json:"imei"`
-			Name string `json:"name"`
-		}{}
-
-		json.NewDecoder(r.Body).Decode(&body)
-		claimedImei = body.Imei
-		claimedName = body.Name
-
-		if r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	loggedInTestServer(t, mux)
-
-	printed, err := captureStdout(t, func() error {
-		return DeviceClaim([]string{"354820091234567", "3", "roof sensor"})
-	})
-
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name       string
+		statusCode int
+		message    string
+		wantOutput string
+		wantError  string
+	}{
+		{
+			name:       "button pressed",
+			statusCode: http.StatusNoContent,
+			wantOutput: "Press the button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n",
+		},
+		{
+			name:       "button not pressed",
+			statusCode: http.StatusRequestTimeout,
+			message:    "the button was not pressed in time",
+			wantOutput: "Press the button on the device to finish claiming it.\n",
+			wantError:  "the server said: the button was not pressed in time",
+		},
 	}
 
-	if claimedImei != "354820091234567" || claimedName != "roof sensor" {
-		t.Errorf("the server received IMEI %q and name %q", claimedImei, claimedName)
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			claimedImei := ""
+			claimedName := ""
 
-	if printed != "Claimed the device into \"pilot\".\n" {
-		t.Errorf("output = %q", printed)
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
+			})
+			mux.HandleFunc("POST /fleets/{id}/devices", func(w http.ResponseWriter, r *http.Request) {
+				body := struct {
+					Imei string `json:"imei"`
+					Name string `json:"name"`
+				}{}
+
+				json.NewDecoder(r.Body).Decode(&body)
+				claimedImei = body.Imei
+				claimedName = body.Name
+
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+				}
+
+				if test.message != "" {
+					http.Error(w, test.message, test.statusCode)
+
+					return
+				}
+
+				w.WriteHeader(test.statusCode)
+			})
+
+			loggedInTestServer(t, mux)
+
+			printed, err := captureStdout(t, func() error {
+				return DeviceClaim([]string{"354820091234567", "3", "roof sensor"})
+			})
+
+			if test.wantError == "" && err != nil {
+				t.Fatal(err)
+			}
+
+			if test.wantError != "" && (err == nil || err.Error() != test.wantError) {
+				t.Fatalf("error = %v, want %q", err, test.wantError)
+			}
+
+			if claimedImei != "354820091234567" || claimedName != "roof sensor" {
+				t.Errorf("the server received IMEI %q and name %q", claimedImei, claimedName)
+			}
+
+			if printed != test.wantOutput {
+				t.Errorf("output = %q, want %q", printed, test.wantOutput)
+			}
+		})
 	}
 }
 
@@ -76,24 +111,6 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 
 	if nameWasPresent {
 		t.Error("the request included a name although none was given")
-	}
-}
-
-func TestDeviceClaimServerError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
-	})
-	mux.HandleFunc("POST /fleets/{id}/devices", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "no unclaimed device with that IMEI", http.StatusNotFound)
-	})
-
-	loggedInTestServer(t, mux)
-
-	err := DeviceClaim([]string{"354820091234567", "3"})
-
-	if err == nil || err.Error() != "the server said: no unclaimed device with that IMEI" {
-		t.Fatalf("error = %v", err)
 	}
 }
 
