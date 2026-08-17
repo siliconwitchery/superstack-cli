@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
+
+var claimClient = &http.Client{Timeout: 90 * time.Second}
 
 func DeviceClaim(arguments []string) error {
 	if len(arguments) != 2 && len(arguments) != 3 {
@@ -46,6 +49,8 @@ func DeviceClaim(arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
+	fmt.Println("Press the button on the device to finish claiming it.")
+
 	payload := map[string]string{"imei": imei}
 
 	if len(arguments) == 3 {
@@ -67,7 +72,7 @@ func DeviceClaim(arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := apiClient.Do(request)
+	response, err := claimClient.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
