@@ -86,10 +86,6 @@ func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
 	// them here is what stops a built one silently losing its wiring. version
 	// and help are answered by main's own switch rather than by a run.
 	planned := map[string]bool{
-		"device claim":   true,
-		"device list":    true,
-		"device rename":  true,
-		"device release": true,
 		"device start":   true,
 		"device stop":    true,
 		"device restart": true,

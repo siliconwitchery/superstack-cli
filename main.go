@@ -44,10 +44,10 @@ var sections = []section{
 	{
 		title: "Devices",
 		commands: []command{
-			{name: "device claim", arguments: "<imei> <fleet_id> [name]", summary: "Claim a device into a fleet, then press its button"},
-			{name: "device list", arguments: "[fleet_id]", summary: "List devices, their state, and when they were last seen"},
-			{name: "device rename", arguments: "<imei> <new_name>", summary: "Rename a device"},
-			{name: "device release", arguments: "<imei>", summary: "Unpair a device from its fleet and factory reset it"},
+			{name: "device claim", arguments: "<imei> <fleet_id> [name]", summary: "Claim a device into a fleet, then press its button", run: commands.DeviceClaim},
+			{name: "device list", arguments: "[fleet_id]", summary: "List devices, their state, and when they were last seen", run: commands.DeviceList},
+			{name: "device rename", arguments: "<imei> <new_name>", summary: "Rename a device", run: commands.DeviceRename},
+			{name: "device release", arguments: "<imei>", summary: "Unpair a device from its fleet and factory reset it", run: commands.DeviceRelease},
 			{name: "device start", arguments: "<imei>", summary: "Run the code on the target"},
 			{name: "device stop", arguments: "<imei>", summary: "Halt the code on the target"},
 			{name: "device restart", arguments: "<imei>", summary: "Restart the code on the target"},
