@@ -63,10 +63,12 @@ func FleetDelete(arguments []string) error {
 		}
 	}
 
+	consequence := "It erases them all, and claiming one again means pressing its button in person."
+
 	if forfeited == "" {
-		fmt.Printf("Delete %q and release its devices? [y/N] ", name)
+		fmt.Printf("Delete %q and release its devices? %s [y/N] ", name, consequence)
 	} else {
-		fmt.Printf("Delete %q, release its devices, and forfeit its remaining %s of credit? [y/N] ", name, forfeited)
+		fmt.Printf("Delete %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
 	}
 
 	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')

@@ -16,8 +16,8 @@ func TestDeviceRelease(t *testing.T) {
 		wantOutput   string
 		wantError    string
 	}{
-		{"confirmed", "yes\n", "", true, "Release the device from \"pilot\"? It can be claimed again afterwards. [y/N] Released the device.\n", ""},
-		{"declined", "n\n", "", false, "Release the device from \"pilot\"? It can be claimed again afterwards. [y/N] Nothing released.\n", ""},
+		{"confirmed", "yes\n", "", true, "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] Released the device.\n", ""},
+		{"declined", "n\n", "", false, "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] Nothing released.\n", ""},
 		{"server refuses", "y\n", "no such device", true, "", "the server said: no such device"},
 	}
 
