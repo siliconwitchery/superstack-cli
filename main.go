@@ -38,7 +38,7 @@ var sections = []section{
 			{name: "fleet list", arguments: "[--json]", summary: "List the fleets you can reach", run: commands.FleetList},
 			{name: "fleet rename", arguments: "<fleet_id> <new_name>", summary: "Rename a fleet", run: commands.FleetRename},
 			{name: "fleet transfer", arguments: "<fleet_id> <email>", summary: "Hand a fleet to a new owner", run: commands.FleetTransfer},
-			{name: "fleet delete", arguments: "<fleet_id>", summary: "Delete a fleet and release its devices", run: commands.FleetDelete},
+			{name: "fleet delete", arguments: "<fleet_id>", summary: "Delete a fleet and factory reset its devices", run: commands.FleetDelete},
 		},
 	},
 	{

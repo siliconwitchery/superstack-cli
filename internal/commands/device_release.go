@@ -57,7 +57,7 @@ func DeviceRelease(arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fmt.Printf("Release the device from %q? It can be claimed again afterwards. [y/N] ", fleetName)
+	fmt.Printf("Release the device from %q? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] ", fleetName)
 
 	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 

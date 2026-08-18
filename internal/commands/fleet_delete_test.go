@@ -162,6 +162,11 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 				t.Errorf("the prompt %q does not state %q", printed, test.wantPrompt)
 			}
 
+			// Both prompts warn what the delete does to the devices
+			if !strings.Contains(printed, "It erases them all, and claiming one again means pressing its button in person.") {
+				t.Errorf("the prompt %q does not say the devices are erased", printed)
+			}
+
 			if test.wantAbsent != "" && strings.Contains(printed, test.wantAbsent) {
 				t.Errorf("the prompt %q mentions %q although nothing is forfeited", printed, test.wantAbsent)
 			}
