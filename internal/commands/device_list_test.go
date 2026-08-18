@@ -10,9 +10,9 @@ import (
 
 func TestDeviceList(t *testing.T) {
 	now := time.Now()
-	devices := fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q},`+
-		`{"imei":"222222222222222","name":null,"fleet_id":4,"last_seen_at":%q},`+
-		`{"imei":"333333333333333","name":"shed","fleet_id":3,"last_seen_at":null}]`,
+	devices := fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q,"reported_state":2,"storage_used":1240,"storage_total":57344},`+
+		`{"imei":"222222222222222","name":null,"fleet_id":4,"last_seen_at":%q,"reported_state":4,"storage_used":2500000,"storage_total":8000000},`+
+		`{"imei":"333333333333333","name":"shed","fleet_id":3,"last_seen_at":null,"reported_state":null,"storage_used":null,"storage_total":null}]`,
 		now.Add(-time.Minute).Format(time.RFC3339), now.Add(-3*time.Hour).Format(time.RFC3339))
 	fleets := `[{"id":3,"name":"pilot","owner":true},{"id":4,"name":"workshop","owner":true},{"id":5,"name":"empty","owner":true}]`
 
@@ -24,7 +24,7 @@ func TestDeviceList(t *testing.T) {
 		wantExact  string
 		wantError  string
 	}{
-		{"table", nil, []string{"IMEI             NAME  FLEET     LAST SEEN", "roof", "pilot", "just now", "-", "workshop", "3 h ago", "never"}, nil, "", ""},
+		{"table", nil, []string{"IMEI             NAME  FLEET     STATE    STORAGE            LAST SEEN", "roof", "pilot", "running", "1.2 kB of 57.3 kB", "just now", "-", "workshop", "crashed", "2.5 MB of 8.0 MB", "3 h ago", "unknown", "never"}, nil, "", ""},
 		{"filtered", []string{"3"}, []string{"111111111111111", "333333333333333"}, []string{"222222222222222", "workshop"}, "", ""},
 		{"json flag anywhere", []string{"3", "--json"}, []string{`"imei":"111111111111111"`, `"fleet_id":3`}, []string{"LAST SEEN", "222222222222222"}, "", ""},
 		{"empty fleet", []string{"5"}, nil, nil, "No devices in that fleet.\n", ""},
@@ -67,6 +67,60 @@ func TestDeviceList(t *testing.T) {
 				if strings.Contains(printed, hidden) {
 					t.Errorf("output %q includes %q", printed, hidden)
 				}
+			}
+		})
+	}
+}
+
+func TestFormatRunState(t *testing.T) {
+	running := 2
+	stopped := 3
+	crashed := 4
+	undefined := 1
+	tests := []struct {
+		name  string
+		state *int
+		want  string
+	}{
+		{"running", &running, "running"},
+		{"stopped", &stopped, "stopped"},
+		{"crashed", &crashed, "crashed"},
+		{"undefined", &undefined, "unknown"},
+		{"nil", nil, "unknown"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := formatRunState(test.state); got != test.want {
+				t.Errorf("formatRunState() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestFormatStorage(t *testing.T) {
+	bytes := int64(999)
+	kilobytes := int64(1240)
+	megabytes := int64(2500000)
+	total := int64(57344)
+	tests := []struct {
+		name  string
+		used  *int64
+		total *int64
+		want  string
+	}{
+		{"bytes", &bytes, &bytes, "999 B of 999 B"},
+		{"kilobytes", &kilobytes, &total, "1.2 kB of 57.3 kB"},
+		{"megabytes", &megabytes, &megabytes, "2.5 MB of 2.5 MB"},
+		{"nil used", nil, &total, "-"},
+		{"nil total", &kilobytes, nil, "-"},
+		{"both nil", nil, nil, "-"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := formatStorage(test.used, test.total); got != test.want {
+				t.Errorf("formatStorage() = %q, want %q", got, test.want)
 			}
 		})
 	}
