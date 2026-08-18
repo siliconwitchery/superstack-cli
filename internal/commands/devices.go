@@ -9,10 +9,13 @@ import (
 )
 
 type deviceEntry struct {
-	Imei       string  `json:"imei"`
-	Name       *string `json:"name"`
-	FleetId    int64   `json:"fleet_id"`
-	LastSeenAt *string `json:"last_seen_at"`
+	Imei          string  `json:"imei"`
+	Name          *string `json:"name"`
+	FleetId       int64   `json:"fleet_id"`
+	LastSeenAt    *string `json:"last_seen_at"`
+	ReportedState *int    `json:"reported_state"`
+	StorageUsed   *int64  `json:"storage_used"`
+	StorageTotal  *int64  `json:"storage_total"`
 }
 
 func fetchDevices() ([]deviceEntry, error) {
@@ -45,6 +48,42 @@ func fetchDevices() ([]deviceEntry, error) {
 	}
 
 	return devices, nil
+}
+
+func formatRunState(state *int) string {
+	if state == nil {
+		return "unknown"
+	}
+
+	switch *state {
+	case 2:
+		return "running"
+	case 3:
+		return "stopped"
+	case 4:
+		return "crashed"
+	default:
+		return "unknown"
+	}
+}
+
+func formatStorage(used *int64, total *int64) string {
+	if used == nil || total == nil {
+		return "-"
+	}
+
+	formatBytes := func(bytes int64) string {
+		switch {
+		case bytes < 1000:
+			return fmt.Sprintf("%d B", bytes)
+		case bytes < 1000*1000:
+			return fmt.Sprintf("%.1f kB", float64(bytes)/1000)
+		default:
+			return fmt.Sprintf("%.1f MB", float64(bytes)/(1000*1000))
+		}
+	}
+
+	return fmt.Sprintf("%s of %s", formatBytes(*used), formatBytes(*total))
 }
 
 func validImei(imei string) bool {
