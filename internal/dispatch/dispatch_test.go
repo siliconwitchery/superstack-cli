@@ -68,7 +68,7 @@ func TestTakeServerFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			remaining, base, err := TakeServerFlag(test.arguments)
+			remaining, base, err := takeServerFlag(test.arguments)
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

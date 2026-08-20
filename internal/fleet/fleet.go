@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/siliconwitchery/superstack-cli/internal/api"
-	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
 )
 
 func Create(session api.Session, arguments []string) error {
@@ -62,7 +61,7 @@ func Create(session api.Session, arguments []string) error {
 }
 
 func List(session api.Session, arguments []string) error {
-	positionals, jsonOutput := dispatch.TakeJsonFlag(arguments)
+	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) != 0 {
 		return errors.New("fleet list takes no arguments")

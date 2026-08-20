@@ -9,7 +9,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func TakeServerFlag(arguments []string) ([]string, string, error) {
+func takeServerFlag(arguments []string) ([]string, string, error) {
 	remaining := []string{}
 
 	base := api.DefaultBase
@@ -38,22 +38,6 @@ func TakeServerFlag(arguments []string) ([]string, string, error) {
 	}
 
 	return remaining, strings.TrimSuffix(base, "/"), nil
-}
-
-func TakeJsonFlag(arguments []string) ([]string, bool) {
-	positionals := []string{}
-	jsonOutput := false
-
-	for _, argument := range arguments {
-		if argument == "--json" {
-			jsonOutput = true
-			continue
-		}
-
-		positionals = append(positionals, argument)
-	}
-
-	return positionals, jsonOutput
 }
 
 type Command struct {
@@ -141,7 +125,7 @@ func printHelp(session api.Session, sections []Section) {
 }
 
 func Dispatch(sections []Section, version string, arguments []string, in io.Reader, out io.Writer) error {
-	arguments, base, err := TakeServerFlag(arguments)
+	arguments, base, err := takeServerFlag(arguments)
 
 	if err != nil {
 		return err

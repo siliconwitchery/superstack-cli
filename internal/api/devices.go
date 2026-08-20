@@ -45,17 +45,3 @@ func FetchDevices(session Session) ([]DeviceEntry, error) {
 
 	return devices, nil
 }
-
-func ValidImei(imei string) bool {
-	if len(imei) != 15 {
-		return false
-	}
-
-	for _, digit := range imei {
-		if digit < '0' || digit > '9' {
-			return false
-		}
-	}
-
-	return true
-}
