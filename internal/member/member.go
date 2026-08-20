@@ -1,0 +1,193 @@
+package member
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/siliconwitchery/superstack-cli/internal/api"
+	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
+)
+
+func Add(session api.Session, arguments []string) error {
+	if len(arguments) != 2 || arguments[0] == "" {
+		return errors.New("member add takes an email address and a fleet id")
+	}
+
+	email := arguments[0]
+
+	fleetId, err := strconv.ParseInt(arguments[1], 10, 64)
+
+	if err != nil || fleetId < 1 {
+		return errors.New("the fleet id is the number shown by fleet list")
+	}
+
+	body, err := json.Marshal(map[string]string{"email": email})
+
+	if err != nil {
+		return err
+	}
+
+	request, err := api.AuthenticatedRequest(session, http.MethodPost,
+		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members", bytes.NewReader(body))
+
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := session.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your connection")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		return api.ServerError(response)
+	}
+
+	fmt.Fprintf(session.Out, "Gave %s access.\n", email)
+
+	return nil
+}
+
+func List(session api.Session, arguments []string) error {
+	positionals, jsonOutput := dispatch.TakeJsonFlag(arguments)
+
+	if len(positionals) != 1 {
+		return errors.New("member list takes a fleet id")
+	}
+
+	fleetId, err := strconv.ParseInt(positionals[0], 10, 64)
+
+	if err != nil || fleetId < 1 {
+		return errors.New("the fleet id is the number shown by fleet list")
+	}
+
+	request, err := api.AuthenticatedRequest(session, http.MethodGet,
+		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members", nil)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := session.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your connection")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return api.ServerError(response)
+	}
+
+	people := struct {
+		Owner   string   `json:"owner"`
+		Members []string `json:"members"`
+	}{}
+
+	err = json.NewDecoder(response.Body).Decode(&people)
+
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		return json.NewEncoder(session.Out).Encode(people)
+	}
+
+	emailWidth := max(len("EMAIL"), len(people.Owner))
+
+	for _, email := range people.Members {
+		emailWidth = max(emailWidth, len(email))
+	}
+
+	fmt.Fprintf(session.Out, "%-*s  %s\n", emailWidth, "EMAIL", "ROLE")
+
+	fmt.Fprintf(session.Out, "%-*s  owner\n", emailWidth, people.Owner)
+
+	for _, email := range people.Members {
+		fmt.Fprintf(session.Out, "%-*s  member\n", emailWidth, email)
+	}
+
+	return nil
+}
+
+func Remove(session api.Session, arguments []string) error {
+	if len(arguments) != 2 || arguments[0] == "" {
+		return errors.New("member remove takes an email address and a fleet id")
+	}
+
+	email := arguments[0]
+
+	fleetId, err := strconv.ParseInt(arguments[1], 10, 64)
+
+	if err != nil || fleetId < 1 {
+		return errors.New("the fleet id is the number shown by fleet list")
+	}
+
+	fleets, err := api.FetchFleets(session)
+
+	if err != nil {
+		return err
+	}
+
+	name := ""
+	found := false
+
+	for _, fleet := range fleets {
+		if fleet.Id == fleetId {
+			name = fleet.Name
+			found = true
+		}
+	}
+
+	if !found {
+		return errors.New("no such fleet")
+	}
+
+	fmt.Fprintf(session.Out, "Take away %s's access to %q? [y/N] ", email, name)
+
+	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+
+	answer = strings.ToLower(strings.TrimSpace(answer))
+
+	if answer != "y" && answer != "yes" {
+		fmt.Fprintln(session.Out, "Nothing removed.")
+		return nil
+	}
+
+	request, err := api.AuthenticatedRequest(session, http.MethodDelete,
+		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members/"+url.PathEscape(email), nil)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := session.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your connection")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		return api.ServerError(response)
+	}
+
+	fmt.Fprintf(session.Out, "Removed access for %s.\n", email)
+
+	return nil
+}

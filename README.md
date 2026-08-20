@@ -1,10 +1,8 @@
 # Superstack CLI
 
-`superstack` is the command line interface to Superstack: sign in, claim
-devices, push Lua code, and stream logs from your fleet. It is a single static
-binary talking to the Superstack server's JSON API.
-
-<!-- Screenshot goes here -->
+`superstack` is the command line interface to Superstack: log in, claim
+devices, upload Lua code, and stream logs from your fleet. It is a single
+static binary for managing Superstack from a terminal.
 
 ## Install
 
@@ -62,6 +60,23 @@ binary talking to the Superstack server's JSON API.
     ./superstack
     ```
 
+1. Run the fast tests while you work. The login tests wait real seconds for
+   the poll interval, and `-short` skips them:
+
+    ```sh
+    CGO_ENABLED=0 go test -short ./...
+    ```
+
+1. Run every check before opening a pull request:
+
+    ```sh
+    gofmt -l .
+    go mod tidy
+    git status --porcelain -- go.mod go.sum
+    CGO_ENABLED=0 go vet ./...
+    CGO_ENABLED=0 go test ./...
+    ```
+
 ## Releasing
 
 1. Create `dev` fresh from `main`:
@@ -74,6 +89,9 @@ binary talking to the Superstack server's JSON API.
 1. Change `version` in `main.go`, run the checks, commit, and push:
 
     ```sh
+    gofmt -l .
+    go mod tidy
+    git status --porcelain -- go.mod go.sum
     CGO_ENABLED=0 go vet ./...
     CGO_ENABLED=0 go test ./...
     git diff --check
