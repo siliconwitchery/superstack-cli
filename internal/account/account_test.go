@@ -3,6 +3,7 @@ package account
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -372,5 +373,24 @@ func TestAccountDelete(t *testing.T) {
 				t.Errorf("the login was removed although the account was not deleted: %v", statErr)
 			}
 		})
+	}
+}
+
+func TestAccountDeleteAsksNothingWhenTheServerIsGone(t *testing.T) {
+	session, out := apitest.LoggedInSession(t, http.NewServeMux())
+
+	gone := httptest.NewServer(http.NotFoundHandler())
+	gone.Close()
+
+	session.Base = gone.URL
+
+	err := Delete(session, nil)
+
+	if err == nil || !strings.Contains(err.Error(), "could not be reached") {
+		t.Fatalf("error = %v, want it to mention the server could not be reached", err)
+	}
+
+	if out.String() != "" {
+		t.Errorf("it asked %q before finding the server was gone", out.String())
 	}
 }
