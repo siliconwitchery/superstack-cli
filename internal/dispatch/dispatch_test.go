@@ -64,6 +64,11 @@ func TestTakeServerFlag(t *testing.T) {
 			arguments: []string{"--server", "", "login"},
 			wantError: "needs an address",
 		},
+		{
+			name:      "an address of nothing but slashes",
+			arguments: []string{"--server", "//", "login"},
+			wantError: "needs an address",
+		},
 	}
 
 	for _, test := range tests {

@@ -17,7 +17,7 @@ func takeServerFlag(arguments []string) ([]string, string, error) {
 	for index := 0; index < len(arguments); index++ {
 		switch {
 		case arguments[index] == "--server":
-			if index+1 == len(arguments) || arguments[index+1] == "" {
+			if index+1 == len(arguments) {
 				return nil, "", errors.New("--server needs an address")
 			}
 
@@ -28,16 +28,18 @@ func takeServerFlag(arguments []string) ([]string, string, error) {
 		case strings.HasPrefix(arguments[index], "--server="):
 			base = strings.TrimPrefix(arguments[index], "--server=")
 
-			if base == "" {
-				return nil, "", errors.New("--server needs an address")
-			}
-
 		default:
 			remaining = append(remaining, arguments[index])
 		}
 	}
 
-	return remaining, strings.TrimSuffix(base, "/"), nil
+	base = strings.TrimRight(base, "/")
+
+	if base == "" {
+		return nil, "", errors.New("--server needs an address")
+	}
+
+	return remaining, base, nil
 }
 
 type Command struct {
