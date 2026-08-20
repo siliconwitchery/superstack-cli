@@ -25,9 +25,9 @@ func TestFleetCreate(t *testing.T) {
 		fmt.Fprintf(w, `{"id": 5, "name": %q}`, body.Name)
 	})
 
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	err := FleetCreate([]string{"field trial"})
+	err := FleetCreate(session, []string{"field trial"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +35,10 @@ func TestFleetCreate(t *testing.T) {
 
 	if created != "field trial" {
 		t.Errorf("the server saw %q created, want %q", created, "field trial")
+	}
+
+	if out.String() != "Created fleet \"field trial\" with id 5.\n" {
+		t.Errorf("output = %q", out.String())
 	}
 }
 
@@ -45,9 +49,9 @@ func TestFleetCreateRelaysARefusal(t *testing.T) {
 		http.Error(w, "the body must carry a name", http.StatusBadRequest)
 	})
 
-	loggedInTestServer(t, mux)
+	session, _ := loggedInSession(t, mux)
 
-	err := FleetCreate([]string{"field trial"})
+	err := FleetCreate(session, []string{"field trial"})
 
 	if err == nil || !strings.Contains(err.Error(), "the server said: the body must carry a name") {
 		t.Fatalf("error = %v, want the relayed refusal", err)
@@ -65,7 +69,7 @@ func TestFleetCreateTakesOneName(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := FleetCreate(test.arguments)
+		err := FleetCreate(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), "takes one name") {
 			t.Errorf("%s: error = %v, want the one-name hint", test.name, err)

@@ -3,10 +3,8 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 type balanceEntry struct {
@@ -15,14 +13,14 @@ type balanceEntry struct {
 	Currency string `json:"currency"`
 }
 
-func fetchBalances() ([]balanceEntry, error) {
-	request, err := authenticatedRequest(http.MethodGet, "/balance", nil)
+func fetchBalances(session Session) ([]balanceEntry, error) {
+	request, err := authenticatedRequest(session, http.MethodGet, "/balance", nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return nil, fmt.Errorf("the server could not be reached: %w", err)
@@ -31,9 +29,7 @@ func fetchBalances() ([]balanceEntry, error) {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return nil, fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return nil, serverError(response)
 	}
 
 	balances := []balanceEntry{}

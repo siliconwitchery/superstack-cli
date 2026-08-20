@@ -49,11 +49,11 @@ func TestFleetList(t *testing.T) {
 				fmt.Fprint(w, test.fleets)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			printed, err := captureStdout(t, func() error {
-				return FleetList(test.arguments)
-			})
+			err := FleetList(session, test.arguments)
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

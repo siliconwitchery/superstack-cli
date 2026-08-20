@@ -62,11 +62,11 @@ func TestDeviceClaim(t *testing.T) {
 				w.WriteHeader(test.statusCode)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			printed, err := captureStdout(t, func() error {
-				return DeviceClaim([]string{"354820091234567", "3", "roof sensor"})
-			})
+			err := DeviceClaim(session, []string{"354820091234567", "3", "roof sensor"})
+
+			printed := out.String()
 
 			if test.wantError == "" && err != nil {
 				t.Fatal(err)
@@ -101,9 +101,9 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	err := DeviceClaim([]string{"354820091234567", "3"})
+	err := DeviceClaim(session, []string{"354820091234567", "3"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +111,10 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 
 	if nameWasPresent {
 		t.Error("the request included a name although none was given")
+	}
+
+	if out.String() != "Press the button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n" {
+		t.Errorf("output = %q", out.String())
 	}
 }
 
@@ -129,7 +133,7 @@ func TestDeviceClaimArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := DeviceClaim(test.arguments)
+		err := DeviceClaim(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
@@ -143,9 +147,9 @@ func TestDeviceClaimUnknownFleetUsesFleetIdGuidance(t *testing.T) {
 		fmt.Fprint(w, `[]`)
 	})
 
-	loggedInTestServer(t, mux)
+	session, _ := loggedInSession(t, mux)
 
-	err := DeviceClaim([]string{"354820091234567", "9"})
+	err := DeviceClaim(session, []string{"354820091234567", "9"})
 
 	if err == nil || !strings.Contains(err.Error(), "shown by fleet list") {
 		t.Fatalf("error = %v", err)

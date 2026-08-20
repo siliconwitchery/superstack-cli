@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
 
-func DeviceRename(arguments []string) error {
+func DeviceRename(session Session, arguments []string) error {
 	if len(arguments) != 2 {
 		return errors.New("device rename takes an IMEI and a name, quoted if it has spaces")
 	}
@@ -33,7 +32,7 @@ func DeviceRename(arguments []string) error {
 		return err
 	}
 
-	request, err := authenticatedRequest(http.MethodPatch, "/devices/"+imei, bytes.NewReader(body))
+	request, err := authenticatedRequest(session, http.MethodPatch, "/devices/"+imei, bytes.NewReader(body))
 
 	if err != nil {
 		return err
@@ -41,7 +40,7 @@ func DeviceRename(arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -50,12 +49,10 @@ func DeviceRename(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
-	fmt.Printf("Renamed the device to %q.\n", name)
+	fmt.Fprintf(session.Out, "Renamed the device to %q.\n", name)
 
 	return nil
 }

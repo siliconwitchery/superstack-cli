@@ -5,16 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
-var claimClient = &http.Client{Timeout: 90 * time.Second}
+func DeviceClaim(session Session, arguments []string) error {
+	claimClient := &http.Client{Timeout: 90 * time.Second}
 
-func DeviceClaim(arguments []string) error {
 	if len(arguments) != 2 && len(arguments) != 3 {
 		return errors.New("device claim takes an IMEI, a fleet id, and an optional name")
 	}
@@ -31,7 +29,7 @@ func DeviceClaim(arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
@@ -49,7 +47,7 @@ func DeviceClaim(arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	fmt.Println("Press the button on the device to finish claiming it.")
+	fmt.Fprintln(session.Out, "Press the button on the device to finish claiming it.")
 
 	payload := map[string]string{"imei": imei}
 
@@ -63,7 +61,7 @@ func DeviceClaim(arguments []string) error {
 		return err
 	}
 
-	request, err := authenticatedRequest(http.MethodPost,
+	request, err := authenticatedRequest(session, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/devices", bytes.NewReader(body))
 
 	if err != nil {
@@ -81,12 +79,10 @@ func DeviceClaim(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
-	fmt.Printf("Claimed the device into %q.\n", fleetName)
+	fmt.Fprintf(session.Out, "Claimed the device into %q.\n", fleetName)
 
 	return nil
 }

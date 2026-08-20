@@ -93,13 +93,12 @@ func TestKeyRevoke(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
+			session.In = strings.NewReader(test.answer)
 
-			answerOnStdin(t, test.answer)
+			err := KeyRevoke(session, test.arguments)
 
-			printed, err := captureStdout(t, func() error {
-				return KeyRevoke(test.arguments)
-			})
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

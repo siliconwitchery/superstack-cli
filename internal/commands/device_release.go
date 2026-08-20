@@ -4,13 +4,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strings"
 )
 
-func DeviceRelease(arguments []string) error {
+func DeviceRelease(session Session, arguments []string) error {
 	if len(arguments) != 1 {
 		return errors.New("device release takes an IMEI")
 	}
@@ -21,7 +19,7 @@ func DeviceRelease(arguments []string) error {
 		return errors.New("the IMEI is the 15-digit number printed on the device")
 	}
 
-	devices, err := fetchDevices()
+	devices, err := fetchDevices(session)
 
 	if err != nil {
 		return err
@@ -39,7 +37,7 @@ func DeviceRelease(arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
@@ -57,24 +55,24 @@ func DeviceRelease(arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fmt.Printf("Release the device from %q? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] ", fleetName)
+	fmt.Fprintf(session.Out, "Release the device from %q? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] ", fleetName)
 
-	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Println("Nothing released.")
+		fmt.Fprintln(session.Out, "Nothing released.")
 		return nil
 	}
 
-	request, err := authenticatedRequest(http.MethodDelete, "/devices/"+imei, nil)
+	request, err := authenticatedRequest(session, http.MethodDelete, "/devices/"+imei, nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -83,12 +81,10 @@ func DeviceRelease(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
-	fmt.Println("Released the device.")
+	fmt.Fprintln(session.Out, "Released the device.")
 
 	return nil
 }

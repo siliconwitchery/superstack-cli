@@ -74,11 +74,11 @@ func TestMemberList(t *testing.T) {
 				fmt.Fprint(w, test.people)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			printed, err := captureStdout(t, func() error {
-				return MemberList(test.arguments)
-			})
+			err := MemberList(session, test.arguments)
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

@@ -10,7 +10,7 @@ import (
 func TestFetchFleetsNotLoggedIn(t *testing.T) {
 	isolateKeyStorage(t)
 
-	_, err := fetchFleets()
+	_, err := fetchFleets(Session{})
 
 	if err == nil || !strings.Contains(err.Error(), "not logged in") {
 		t.Fatalf("error = %v, want the not-logged-in hint", err)
@@ -18,7 +18,7 @@ func TestFetchFleetsNotLoggedIn(t *testing.T) {
 }
 
 func TestFetchFleetsEmptyKeyFile(t *testing.T) {
-	loggedInTestServer(t, http.NotFoundHandler())
+	session, _ := loggedInSession(t, http.NotFoundHandler())
 
 	path, err := keyPath()
 
@@ -32,7 +32,7 @@ func TestFetchFleetsEmptyKeyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = fetchFleets()
+	_, err = fetchFleets(session)
 
 	if err == nil || !strings.Contains(err.Error(), "not logged in") {
 		t.Fatalf("error = %v, want the not-logged-in hint for an empty key file", err)

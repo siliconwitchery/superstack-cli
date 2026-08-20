@@ -41,13 +41,13 @@ func TestMemberRemove(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			answerOnStdin(t, test.answer)
+			session.In = strings.NewReader(test.answer)
 
-			printed, err := captureStdout(t, func() error {
-				return MemberRemove([]string{test.email, "3"})
-			})
+			err := MemberRemove(session, []string{test.email, "3"})
+
+			printed := out.String()
 
 			if err != nil {
 				t.Fatal(err)
@@ -82,7 +82,7 @@ func TestMemberRemoveArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := MemberRemove(test.arguments)
+		err := MemberRemove(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,15 +19,18 @@ func TestLogout(t *testing.T) {
 		wantError      string
 		wantRevocation bool
 		wantKeyKept    bool
+		wantShown      string
 	}{
 		{
 			name:           "revokes and forgets the stored key",
 			storedKey:      "ssk_test",
 			revokeStatus:   http.StatusNoContent,
 			wantRevocation: true,
+			wantShown:      "Logged out.\n",
 		},
 		{
-			name: "nothing stored",
+			name:      "nothing stored",
+			wantShown: "Not logged in.\n",
 		},
 		{
 			name:           "server refuses the revocation",
@@ -67,9 +71,8 @@ func TestLogout(t *testing.T) {
 				server.Close()
 			}
 
-			chosenApiBase = server.URL
-
-			t.Cleanup(func() { chosenApiBase = "" })
+			out := &bytes.Buffer{}
+			session := NewSession(server.URL, "test", strings.NewReader(""), out)
 
 			path, err := keyPath()
 
@@ -91,7 +94,7 @@ func TestLogout(t *testing.T) {
 				}
 			}
 
-			err = Logout(nil)
+			err = Logout(session, nil)
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
@@ -117,6 +120,10 @@ func TestLogout(t *testing.T) {
 
 			if !test.wantKeyKept && !os.IsNotExist(statError) {
 				t.Error("the stored key still exists after logout")
+			}
+
+			if out.String() != test.wantShown {
+				t.Errorf("output = %q, want %q", out.String(), test.wantShown)
 			}
 		})
 	}

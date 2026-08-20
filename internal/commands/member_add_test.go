@@ -26,9 +26,9 @@ func TestMemberAdd(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	err := MemberAdd([]string{"member@example.com", "3"})
+	err := MemberAdd(session, []string{"member@example.com", "3"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +37,10 @@ func TestMemberAdd(t *testing.T) {
 	if addedPath != "/fleets/3/members" || addedEmail != "member@example.com" {
 		t.Errorf("the server saw %q added at %q, want %q at %q",
 			addedEmail, addedPath, "member@example.com", "/fleets/3/members")
+	}
+
+	if out.String() != "Gave member@example.com access.\n" {
+		t.Errorf("output = %q", out.String())
 	}
 }
 
@@ -53,7 +57,7 @@ func TestMemberAddArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := MemberAdd(test.arguments)
+		err := MemberAdd(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"io"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,34 +10,6 @@ import (
 	"strings"
 	"testing"
 )
-
-func captureStdout(t *testing.T, run func() error) (string, error) {
-	t.Helper()
-
-	readEnd, writeEnd, err := os.Pipe()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stdout := os.Stdout
-
-	os.Stdout = writeEnd
-
-	runError := run()
-
-	os.Stdout = stdout
-
-	writeEnd.Close()
-
-	printed, err := io.ReadAll(readEnd)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return string(printed), runError
-}
 
 func isolateKeyStorage(t *testing.T) string {
 	t.Helper()
@@ -51,7 +23,7 @@ func isolateKeyStorage(t *testing.T) string {
 	return temporary
 }
 
-func loggedInTestServer(t *testing.T, handler http.Handler) {
+func loggedInSession(t *testing.T, handler http.Handler) (Session, *bytes.Buffer) {
 	t.Helper()
 
 	isolateKeyStorage(t)
@@ -89,9 +61,11 @@ func loggedInTestServer(t *testing.T, handler http.Handler) {
 
 	t.Cleanup(server.Close)
 
-	chosenApiBase = server.URL
+	out := &bytes.Buffer{}
+	session := NewSession(server.URL, "test", strings.NewReader(""), out)
+	session.OpenBrowser = func(url string) {}
 
-	t.Cleanup(func() { chosenApiBase = "" })
+	return session, out
 }
 
 func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {
@@ -200,11 +174,7 @@ func TestTakeServerFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			chosenApiBase = ""
-
-			t.Cleanup(func() { chosenApiBase = "" })
-
-			remaining, err := TakeServerFlag(test.arguments)
+			remaining, base, err := TakeServerFlag(test.arguments)
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
@@ -222,20 +192,20 @@ func TestTakeServerFlag(t *testing.T) {
 				t.Errorf("remaining = %q, want %q", strings.Join(remaining, " "), test.wantRemaining)
 			}
 
-			if chosenApiBase != test.wantBase {
-				t.Errorf("chosenApiBase = %q, want %q", chosenApiBase, test.wantBase)
+			wantBase := test.wantBase
+
+			if wantBase == "" {
+				wantBase = defaultApiBase
+			}
+
+			if base != wantBase {
+				t.Errorf("base = %q, want %q", base, wantBase)
 			}
 		})
 	}
 }
 
 func TestApiRequestBase(t *testing.T) {
-	previousVersion := CliVersion
-
-	CliVersion = "1.2.3"
-
-	t.Cleanup(func() { CliVersion = previousVersion })
-
 	tests := []struct {
 		name       string
 		chosenBase string
@@ -254,11 +224,15 @@ func TestApiRequestBase(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			chosenApiBase = test.chosenBase
+			base := test.chosenBase
 
-			t.Cleanup(func() { chosenApiBase = "" })
+			if base == "" {
+				base = defaultApiBase
+			}
 
-			request, err := apiRequest(http.MethodGet, "/login", nil)
+			session := NewSession(base, "1.2.3", strings.NewReader(""), &bytes.Buffer{})
+
+			request, err := apiRequest(session, http.MethodGet, "/login", nil)
 
 			if err != nil {
 				t.Fatal(err)
@@ -282,11 +256,9 @@ func TestCheckServer(t *testing.T) {
 
 	defer reachable.Close()
 
-	chosenApiBase = reachable.URL
+	session := NewSession(reachable.URL, "test", strings.NewReader(""), &bytes.Buffer{})
 
-	t.Cleanup(func() { chosenApiBase = "" })
-
-	err := CheckServer()
+	err := CheckServer(session)
 
 	if err != nil {
 		t.Fatalf("a reachable server reported: %v", err)
@@ -296,9 +268,9 @@ func TestCheckServer(t *testing.T) {
 
 	unreachable.Close()
 
-	chosenApiBase = unreachable.URL
+	session.Base = unreachable.URL
 
-	err = CheckServer()
+	err = CheckServer(session)
 
 	if err == nil || !strings.Contains(err.Error(), "cannot be reached") {
 		t.Fatalf("error = %v, want the consistent cannot-be-reached message", err)

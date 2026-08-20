@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 )
 
-func AccountTopup(arguments []string) error {
+func AccountTopup(session Session, arguments []string) error {
 
 	if len(arguments) != 1 {
 		return errors.New("account topup takes a fleet id")
@@ -24,14 +21,14 @@ func AccountTopup(arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	request, err := authenticatedRequest(http.MethodPost,
+	request, err := authenticatedRequest(session, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/topup", nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -40,9 +37,7 @@ func AccountTopup(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
 	opened := struct {
@@ -55,15 +50,15 @@ func AccountTopup(arguments []string) error {
 		return errors.New("the payment page could not be opened, try again")
 	}
 
-	fmt.Printf("Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the payment completes.\nPress enter to open the browser.\n", opened.Url)
+	fmt.Fprintf(session.Out, "Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the payment completes.\nPress enter to open the browser.\n", opened.Url)
 
-	_, err = bufio.NewReader(os.Stdin).ReadString('\n')
+	_, err = bufio.NewReader(session.In).ReadString('\n')
 
 	if err != nil {
 		return nil
 	}
 
-	openBrowser(opened.Url)
+	session.OpenBrowser(opened.Url)
 
 	return nil
 }

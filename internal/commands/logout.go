@@ -3,14 +3,13 @@ package commands
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"strings"
 )
 
-func Logout(arguments []string) error {
+func Logout(session Session, arguments []string) error {
 
 	if len(arguments) != 0 {
 		return errors.New("logout takes no arguments")
@@ -25,7 +24,7 @@ func Logout(arguments []string) error {
 	keyBytes, err := os.ReadFile(path)
 
 	if errors.Is(err, fs.ErrNotExist) {
-		fmt.Println("Not logged in.")
+		fmt.Fprintln(session.Out, "Not logged in.")
 		return nil
 	}
 
@@ -35,7 +34,7 @@ func Logout(arguments []string) error {
 
 	// Revoke on the server first, keeping the key on any failure so another
 	// logout can retry; a forgotten key can never be revoked
-	revokeRequest, err := apiRequest(http.MethodPost, "/logout", nil)
+	revokeRequest, err := apiRequest(session, http.MethodPost, "/logout", nil)
 
 	if err != nil {
 		return err
@@ -43,7 +42,7 @@ func Logout(arguments []string) error {
 
 	revokeRequest.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(keyBytes)))
 
-	revokeResponse, err := apiClient.Do(revokeRequest)
+	revokeResponse, err := session.Client.Do(revokeRequest)
 
 	if err != nil {
 		return fmt.Errorf("you are still logged in: the server could not be reached: %w", err)
@@ -52,15 +51,7 @@ func Logout(arguments []string) error {
 	defer revokeResponse.Body.Close()
 
 	if revokeResponse.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(revokeResponse.Body, 4096))
-
-		detail := strings.TrimSpace(string(message))
-
-		if detail == "" {
-			detail = revokeResponse.Status
-		}
-
-		return fmt.Errorf("you are still logged in: the server said: %s", detail)
+		return fmt.Errorf("you are still logged in: %w", serverError(revokeResponse))
 	}
 
 	err = os.Remove(path)
@@ -69,7 +60,7 @@ func Logout(arguments []string) error {
 		return err
 	}
 
-	fmt.Println("Logged out.")
+	fmt.Fprintln(session.Out, "Logged out.")
 
 	return nil
 }

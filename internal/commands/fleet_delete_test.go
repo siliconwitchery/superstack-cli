@@ -3,36 +3,9 @@ package commands
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 )
-
-func answerOnStdin(t *testing.T, answer string) {
-	t.Helper()
-
-	readEnd, writeEnd, err := os.Pipe()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	originalStdin := os.Stdin
-
-	os.Stdin = readEnd
-
-	t.Cleanup(func() { os.Stdin = originalStdin })
-
-	if answer != "" {
-		_, err = writeEnd.WriteString(answer)
-
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	writeEnd.Close()
-}
 
 func TestFleetDelete(t *testing.T) {
 	tests := []struct {
@@ -81,13 +54,13 @@ func TestFleetDelete(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			answerOnStdin(t, test.answer)
+			session.In = strings.NewReader(test.answer)
 
-			printed, err := captureStdout(t, func() error {
-				return FleetDelete([]string{"3"})
-			})
+			err := FleetDelete(session, []string{"3"})
+
+			printed := out.String()
 
 			switch {
 			case test.wantError != "":
@@ -146,13 +119,13 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 				fmt.Fprint(w, test.balance)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			answerOnStdin(t, "n\n")
+			session.In = strings.NewReader("n\n")
 
-			printed, err := captureStdout(t, func() error {
-				return FleetDelete([]string{"3"})
-			})
+			err := FleetDelete(session, []string{"3"})
+
+			printed := out.String()
 
 			if err != nil {
 				t.Fatal(err)
@@ -193,11 +166,11 @@ func TestFleetDeleteRefusesWhenTheBalanceIsUnknown(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	loggedInTestServer(t, mux)
+	session, _ := loggedInSession(t, mux)
 
-	answerOnStdin(t, "y\n")
+	session.In = strings.NewReader("y\n")
 
-	err := FleetDelete([]string{"3"})
+	err := FleetDelete(session, []string{"3"})
 
 	if err == nil || !strings.Contains(err.Error(), "could not read the balances") {
 		t.Fatalf("error = %v, want the server's balance refusal", err)
@@ -215,9 +188,9 @@ func TestFleetDeleteUnknownFleet(t *testing.T) {
 		fmt.Fprint(w, `[]`)
 	})
 
-	loggedInTestServer(t, mux)
+	session, _ := loggedInSession(t, mux)
 
-	err := FleetDelete([]string{"9"})
+	err := FleetDelete(session, []string{"9"})
 
 	if err == nil || !strings.Contains(err.Error(), "no such fleet") {
 		t.Fatalf("error = %v, want no such fleet", err)
@@ -236,7 +209,7 @@ func TestFleetDeleteArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := FleetDelete(test.arguments)
+		err := FleetDelete(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

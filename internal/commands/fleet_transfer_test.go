@@ -26,9 +26,9 @@ func TestFleetTransfer(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	err := FleetTransfer([]string{"3", "successor@example.com"})
+	err := FleetTransfer(session, []string{"3", "successor@example.com"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +37,10 @@ func TestFleetTransfer(t *testing.T) {
 	if transferredPath != "/fleets/3/owner" || transferredTo != "successor@example.com" {
 		t.Errorf("the server saw %q handed to %q, want %q handed to %q",
 			transferredPath, transferredTo, "/fleets/3/owner", "successor@example.com")
+	}
+
+	if out.String() != "Transferred the fleet to successor@example.com.\n" {
+		t.Errorf("output = %q", out.String())
 	}
 }
 
@@ -53,7 +57,7 @@ func TestFleetTransferArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := FleetTransfer(test.arguments)
+		err := FleetTransfer(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

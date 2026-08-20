@@ -23,11 +23,11 @@ func TestDeviceRename(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	printed, err := captureStdout(t, func() error {
-		return DeviceRename([]string{"354820091234567", " pilot "})
-	})
+	err := DeviceRename(session, []string{"354820091234567", " pilot "})
+
+	printed := out.String()
 
 	if err != nil {
 		t.Fatal(err)
@@ -48,9 +48,9 @@ func TestDeviceRenameServerError(t *testing.T) {
 		http.Error(w, "no such device", http.StatusNotFound)
 	})
 
-	loggedInTestServer(t, mux)
+	session, _ := loggedInSession(t, mux)
 
-	err := DeviceRename([]string{"354820091234567", "pilot"})
+	err := DeviceRename(session, []string{"354820091234567", "pilot"})
 
 	if err == nil || err.Error() != "the server said: no such device" {
 		t.Fatalf("error = %v", err)
@@ -73,7 +73,7 @@ func TestDeviceRenameArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := DeviceRename(test.arguments)
+		err := DeviceRename(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

@@ -4,24 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 )
 
-func KeyList(arguments []string) error {
+func KeyList(session Session, arguments []string) error {
 
-	jsonOutput := false
-
-	positionals := []string{}
-
-	for _, argument := range arguments {
-		if argument == "--json" {
-			jsonOutput = true
-			continue
-		}
-
-		positionals = append(positionals, argument)
-	}
+	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
 		return errors.New("key list takes at most one fleet id")
@@ -39,7 +27,7 @@ func KeyList(arguments []string) error {
 		chosenFleetId = parsed
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
@@ -57,7 +45,7 @@ func KeyList(arguments []string) error {
 		}
 	}
 
-	fetched, err := fetchKeys()
+	fetched, err := fetchKeys(session)
 
 	if err != nil {
 		return err
@@ -72,11 +60,11 @@ func KeyList(arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(os.Stdout).Encode(keys)
+		return json.NewEncoder(session.Out).Encode(keys)
 	}
 
 	if len(keys) == 0 {
-		fmt.Println("No keys yet. Create one with key create.")
+		fmt.Fprintln(session.Out, "No keys yet. Create one with key create.")
 		return nil
 	}
 
@@ -90,11 +78,11 @@ func KeyList(arguments []string) error {
 		fleetNameWidth = max(fleetNameWidth, len(fleetNames[key.Fleet]))
 	}
 
-	fmt.Printf("%-*s  %-*s  %-*s  %-8s  %s\n",
+	fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-8s  %s\n",
 		idWidth, "ID", fleetIdWidth, "FLEET", fleetNameWidth, "FLEET NAME", "KEY", "LABEL")
 
 	for _, key := range keys {
-		fmt.Printf("%-*d  %-*d  %-*s  ...%s  %s\n",
+		fmt.Fprintf(session.Out, "%-*d  %-*d  %-*s  ...%s  %s\n",
 			idWidth, key.Id, fleetIdWidth, key.Fleet, fleetNameWidth, fleetNames[key.Fleet], key.Suffix, key.Label)
 	}
 

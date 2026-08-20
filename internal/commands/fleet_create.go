@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 )
 
-func FleetCreate(arguments []string) error {
+func FleetCreate(session Session, arguments []string) error {
 
 	if len(arguments) != 1 || arguments[0] == "" {
 		return errors.New("fleet create takes one name, quoted if it has spaces")
@@ -22,7 +20,7 @@ func FleetCreate(arguments []string) error {
 		return err
 	}
 
-	request, err := authenticatedRequest(http.MethodPost, "/fleets", bytes.NewReader(body))
+	request, err := authenticatedRequest(session, http.MethodPost, "/fleets", bytes.NewReader(body))
 
 	if err != nil {
 		return err
@@ -30,7 +28,7 @@ func FleetCreate(arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -39,9 +37,7 @@ func FleetCreate(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
 	created := struct {
@@ -55,7 +51,7 @@ func FleetCreate(arguments []string) error {
 		return err
 	}
 
-	fmt.Printf("Created fleet %q with id %d.\n", created.Name, created.Id)
+	fmt.Fprintf(session.Out, "Created fleet %q with id %d.\n", created.Name, created.Id)
 
 	return nil
 }

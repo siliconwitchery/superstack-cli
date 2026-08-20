@@ -3,9 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 )
 
 type keyEntry struct {
@@ -15,14 +13,14 @@ type keyEntry struct {
 	Suffix string `json:"suffix"`
 }
 
-func fetchKeys() ([]keyEntry, error) {
-	request, err := authenticatedRequest(http.MethodGet, "/keys", nil)
+func fetchKeys(session Session) ([]keyEntry, error) {
+	request, err := authenticatedRequest(session, http.MethodGet, "/keys", nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return nil, fmt.Errorf("the server could not be reached: %w", err)
@@ -31,9 +29,7 @@ func fetchKeys() ([]keyEntry, error) {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return nil, fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return nil, serverError(response)
 	}
 
 	keys := []keyEntry{}

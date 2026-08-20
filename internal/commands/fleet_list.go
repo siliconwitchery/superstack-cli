@@ -3,34 +3,29 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 )
 
-func FleetList(arguments []string) error {
+func FleetList(session Session, arguments []string) error {
 
-	jsonOutput := false
+	positionals, jsonOutput := takeJsonFlag(arguments)
 
-	for _, argument := range arguments {
-		if argument != "--json" {
-			return fmt.Errorf("fleet list takes no arguments, only --json")
-		}
-
-		jsonOutput = true
+	if len(positionals) != 0 {
+		return fmt.Errorf("fleet list takes no arguments, only --json")
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(os.Stdout).Encode(fleets)
+		return json.NewEncoder(session.Out).Encode(fleets)
 	}
 
 	if len(fleets) == 0 {
-		fmt.Println("No fleets yet. Create one with fleet create.")
+		fmt.Fprintln(session.Out, "No fleets yet. Create one with fleet create.")
 		return nil
 	}
 
@@ -42,7 +37,7 @@ func FleetList(arguments []string) error {
 		nameWidth = max(nameWidth, len(fleet.Name))
 	}
 
-	fmt.Printf("%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "ROLE")
+	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "ROLE")
 
 	for _, fleet := range fleets {
 		role := "member"
@@ -51,7 +46,7 @@ func FleetList(arguments []string) error {
 			role = "owner"
 		}
 
-		fmt.Printf("%-*d  %-*s  %s\n", idWidth, fleet.Id, nameWidth, fleet.Name, role)
+		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, fleet.Id, nameWidth, fleet.Name, role)
 	}
 
 	return nil

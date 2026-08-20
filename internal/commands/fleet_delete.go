@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 )
 
-func FleetDelete(arguments []string) error {
+func FleetDelete(session Session, arguments []string) error {
 
 	if len(arguments) != 1 {
 		return errors.New("fleet delete takes a fleet id")
@@ -23,7 +21,7 @@ func FleetDelete(arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
@@ -43,7 +41,7 @@ func FleetDelete(arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	balances, err := fetchBalances()
+	balances, err := fetchBalances(session)
 
 	if err != nil {
 		return err
@@ -66,28 +64,28 @@ func FleetDelete(arguments []string) error {
 	consequence := "It erases them all, and claiming one again means pressing its button in person."
 
 	if forfeited == "" {
-		fmt.Printf("Delete %q and release its devices? %s [y/N] ", name, consequence)
+		fmt.Fprintf(session.Out, "Delete %q and release its devices? %s [y/N] ", name, consequence)
 	} else {
-		fmt.Printf("Delete %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
+		fmt.Fprintf(session.Out, "Delete %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
 	}
 
-	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Println("Nothing deleted.")
+		fmt.Fprintln(session.Out, "Nothing deleted.")
 		return nil
 	}
 
-	request, err := authenticatedRequest(http.MethodDelete,
+	request, err := authenticatedRequest(session, http.MethodDelete,
 		"/fleets/"+strconv.FormatInt(fleetId, 10), nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -96,12 +94,10 @@ func FleetDelete(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
-	fmt.Printf("Deleted %q.\n", name)
+	fmt.Fprintf(session.Out, "Deleted %q.\n", name)
 
 	return nil
 }

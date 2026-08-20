@@ -42,12 +42,12 @@ func TestDeviceRelease(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			loggedInTestServer(t, mux)
-			answerOnStdin(t, test.answer)
+			session, out := loggedInSession(t, mux)
+			session.In = strings.NewReader(test.answer)
 
-			printed, err := captureStdout(t, func() error {
-				return DeviceRelease([]string{"354820091234567"})
-			})
+			err := DeviceRelease(session, []string{"354820091234567"})
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {
@@ -85,7 +85,7 @@ func TestDeviceReleaseArgumentsAndUnknownDevice(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := DeviceRelease(test.arguments)
+		err := DeviceRelease(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v", test.name, err)
@@ -96,9 +96,9 @@ func TestDeviceReleaseArgumentsAndUnknownDevice(t *testing.T) {
 	mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[]`)
 	})
-	loggedInTestServer(t, mux)
+	session, _ := loggedInSession(t, mux)
 
-	err := DeviceRelease([]string{"354820091234567"})
+	err := DeviceRelease(session, []string{"354820091234567"})
 
 	if err == nil || err.Error() != "no such device, device list shows yours" {
 		t.Fatalf("error = %v", err)

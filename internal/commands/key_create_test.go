@@ -88,11 +88,11 @@ func TestKeyCreate(t *testing.T) {
 				fmt.Fprint(w, `{"id":1,"key":"ssf_testtesttestab2de"}`)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			printed, err := captureStdout(t, func() error {
-				return KeyCreate(test.arguments)
-			})
+			err := KeyCreate(session, test.arguments)
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

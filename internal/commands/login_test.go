@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"time"
 )
 
-func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pollAnswers []string) *[]time.Time {
+func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pollAnswers []string) (*[]time.Time, string) {
 	t.Helper()
 
 	devicePath := "/login/device/code"
@@ -100,24 +101,10 @@ func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pol
 
 	t.Cleanup(server.Close)
 
-	if provider == "gitlab" {
-		previousBase := gitlabBase
-
-		gitlabBase = server.URL
-
-		t.Cleanup(func() { gitlabBase = previousBase })
-	} else {
-		previousBase := githubBase
-
-		githubBase = server.URL
-
-		t.Cleanup(func() { githubBase = previousBase })
-	}
-
-	return polledAt
+	return polledAt, server.URL
 }
 
-func fakeSuperstack(t *testing.T) {
+func fakeSuperstack(t *testing.T) (Session, *bytes.Buffer) {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -152,9 +139,11 @@ func fakeSuperstack(t *testing.T) {
 
 	t.Cleanup(server.Close)
 
-	chosenApiBase = server.URL
+	out := &bytes.Buffer{}
+	session := NewSession(server.URL, "test", strings.NewReader(""), out)
+	session.OpenBrowser = func(url string) {}
 
-	t.Cleanup(func() { chosenApiBase = "" })
+	return session, out
 }
 
 func TestLogin(t *testing.T) {
@@ -200,7 +189,7 @@ func TestLogin(t *testing.T) {
 				`{"error": "slow_down", "interval": 1}`,
 				`{"access_token": "gho_test"}`,
 			},
-			wantPollGap: time.Second,
+			wantPollGap: 6 * time.Second,
 		},
 		{
 			name:     "gitlab slowed down without an interval",
@@ -209,7 +198,7 @@ func TestLogin(t *testing.T) {
 				`{"error": "slow_down"}`,
 				`{"access_token": "glpat-test"}`,
 			},
-			wantPollGap: 5 * time.Second,
+			wantPollGap: 6 * time.Second,
 		},
 		{
 			name:           "the device interval is honored",
@@ -251,21 +240,22 @@ func TestLogin(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			isolateKeyStorage(t)
 
-			answerOnStdin(t, "")
+			deviceInterval := test.deviceInterval
 
-			captureBrowserOpens(t)
+			if deviceInterval == 0 {
+				deviceInterval = 1
+			}
 
-			previousMinimum := minimumPollInterval
+			polledAt, providerBase := fakeProviderForLogin(t, test.provider, deviceInterval, test.pollAnswers)
+			session, _ := fakeSuperstack(t)
 
-			minimumPollInterval = 0
+			if test.provider == "gitlab" {
+				session.GitlabBase = providerBase
+			} else {
+				session.GithubBase = providerBase
+			}
 
-			t.Cleanup(func() { minimumPollInterval = previousMinimum })
-
-			polledAt := fakeProviderForLogin(t, test.provider, test.deviceInterval, test.pollAnswers)
-
-			fakeSuperstack(t)
-
-			err := Login([]string{test.provider})
+			err := Login(session, []string{test.provider})
 
 			if test.wantPollGap > 0 {
 				if len(*polledAt) < 2 {
@@ -329,23 +319,14 @@ func TestLogin(t *testing.T) {
 func TestLoginOpensTheBrowserOnEnter(t *testing.T) {
 	isolateKeyStorage(t)
 
-	previousMinimum := minimumPollInterval
+	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, []string{`{"access_token": "glpat-test"}`})
+	session, _ := fakeSuperstack(t)
+	session.GitlabBase = providerBase
+	session.In = strings.NewReader("\n")
+	browserOpens := make(chan string, 1)
+	session.OpenBrowser = func(url string) { browserOpens <- url }
 
-	minimumPollInterval = 0
-
-	t.Cleanup(func() { minimumPollInterval = previousMinimum })
-
-	fakeProviderForLogin(t, "gitlab", 0, []string{`{"access_token": "glpat-test"}`})
-
-	fakeSuperstack(t)
-
-	browserOpens := captureBrowserOpens(t)
-
-	answerOnStdin(t, "\n")
-
-	_, err := captureStdout(t, func() error {
-		return Login([]string{"gitlab"})
-	})
+	err := Login(session, []string{"gitlab"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -374,7 +355,7 @@ func TestLoginRequiresAProvider(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Login(test.arguments)
+		err := Login(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), "a provider: github or gitlab") {
 			t.Errorf("%s: error = %v, want the provider hint", test.name, err)
@@ -395,11 +376,10 @@ func TestLoginProviderNotOffered(t *testing.T) {
 
 	t.Cleanup(server.Close)
 
-	chosenApiBase = server.URL
+	out := &bytes.Buffer{}
+	session := NewSession(server.URL, "test", strings.NewReader(""), out)
 
-	t.Cleanup(func() { chosenApiBase = "" })
-
-	err := Login([]string{"gitlab"})
+	err := Login(session, []string{"gitlab"})
 
 	if err == nil || !strings.Contains(err.Error(), "offers no gitlab login") {
 		t.Fatalf("error = %v, want it to say the server offers no gitlab login", err)

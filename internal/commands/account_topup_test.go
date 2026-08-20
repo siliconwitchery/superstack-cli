@@ -70,15 +70,15 @@ func TestAccountTopup(t *testing.T) {
 				fmt.Fprint(w, `{"url":"https://checkout.stripe.com/c/pay/cs_test_1"}`)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
+			session.In = strings.NewReader(test.stdin)
 
-			answerOnStdin(t, test.stdin)
+			browserOpens := make(chan string, 1)
+			session.OpenBrowser = func(url string) { browserOpens <- url }
 
-			browserOpens := captureBrowserOpens(t)
+			err := AccountTopup(session, test.arguments)
 
-			printed, err := captureStdout(t, func() error {
-				return AccountTopup(test.arguments)
-			})
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

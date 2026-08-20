@@ -26,9 +26,9 @@ func TestFleetRename(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	err := FleetRename([]string{"9", " pilot "})
+	err := FleetRename(session, []string{"9", " pilot "})
 
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +37,10 @@ func TestFleetRename(t *testing.T) {
 	if renamedPath != "/fleets/9" || renamedTo != "pilot" {
 		t.Errorf("the server saw %q renamed to %q, want %q renamed to %q",
 			renamedPath, renamedTo, "/fleets/9", "pilot")
+	}
+
+	if out.String() != "Renamed the fleet to \"pilot\".\n" {
+		t.Errorf("output = %q", out.String())
 	}
 }
 
@@ -55,7 +59,7 @@ func TestFleetRenameArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := FleetRename(test.arguments)
+		err := FleetRename(Session{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

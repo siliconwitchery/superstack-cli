@@ -76,7 +76,7 @@ func TestAccountDelete(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
 			path, err := keyPath()
 
@@ -84,11 +84,11 @@ func TestAccountDelete(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			answerOnStdin(t, test.answer)
+			session.In = strings.NewReader(test.answer)
 
-			printed, err := captureStdout(t, func() error {
-				return AccountDelete(test.arguments)
-			})
+			err = AccountDelete(session, test.arguments)
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

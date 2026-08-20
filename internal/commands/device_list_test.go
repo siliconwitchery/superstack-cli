@@ -38,9 +38,11 @@ func TestDeviceList(t *testing.T) {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, devices) })
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, fleets) })
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			printed, err := captureStdout(t, func() error { return DeviceList(test.arguments) })
+			err := DeviceList(session, test.arguments)
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
@@ -130,9 +132,11 @@ func TestDeviceListEmptyAndServerError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `[]`) })
 	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `[]`) })
-	loggedInTestServer(t, mux)
+	session, out := loggedInSession(t, mux)
 
-	printed, err := captureStdout(t, func() error { return DeviceList(nil) })
+	err := DeviceList(session, nil)
+
+	printed := out.String()
 
 	if err != nil {
 		t.Fatal(err)
@@ -146,9 +150,9 @@ func TestDeviceListEmptyAndServerError(t *testing.T) {
 	errorMux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "devices unavailable", http.StatusServiceUnavailable)
 	})
-	loggedInTestServer(t, errorMux)
+	errorSession, _ := loggedInSession(t, errorMux)
 
-	err = DeviceList(nil)
+	err = DeviceList(errorSession, nil)
 
 	if err == nil || err.Error() != "the server said: devices unavailable" {
 		t.Fatalf("error = %v", err)

@@ -4,23 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 )
 
-func DeviceList(arguments []string) error {
-	jsonOutput := false
-	positionals := []string{}
-
-	for _, argument := range arguments {
-		if argument == "--json" {
-			jsonOutput = true
-			continue
-		}
-
-		positionals = append(positionals, argument)
-	}
+func DeviceList(session Session, arguments []string) error {
+	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
 		return errors.New("device list takes at most one fleet id")
@@ -38,13 +27,13 @@ func DeviceList(arguments []string) error {
 		chosenFleetId = parsed
 	}
 
-	devices, err := fetchDevices()
+	devices, err := fetchDevices(session)
 
 	if err != nil {
 		return err
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
@@ -71,14 +60,14 @@ func DeviceList(arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(os.Stdout).Encode(filtered)
+		return json.NewEncoder(session.Out).Encode(filtered)
 	}
 
 	if len(filtered) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Println("No devices yet. Claim one with device claim.")
+			fmt.Fprintln(session.Out, "No devices yet. Claim one with device claim.")
 		} else {
-			fmt.Println("No devices in that fleet.")
+			fmt.Fprintln(session.Out, "No devices in that fleet.")
 		}
 
 		return nil
@@ -139,12 +128,12 @@ func DeviceList(arguments []string) error {
 		storageWidth = max(storageWidth, len(storageValues[index]))
 	}
 
-	fmt.Printf("%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
+	fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET",
 		stateWidth, "STATE", storageWidth, "STORAGE", "LAST SEEN")
 
 	for index := range filtered {
-		fmt.Printf("%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
+		fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 			imeiWidth, imeiValues[index], nameWidth, nameValues[index], fleetWidth, fleetValues[index],
 			stateWidth, stateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
 	}

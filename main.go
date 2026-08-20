@@ -2,249 +2,92 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
 	"github.com/siliconwitchery/superstack-cli/internal/commands"
 )
 
 const version = "0.0.3"
 
-type command struct {
-	name      string
-	arguments string
-	summary   string
-	run       func(arguments []string) error
-}
-
-type section struct {
-	title    string
-	commands []command
-}
-
-var sections = []section{
+var sections = []commands.Section{
 	{
-		title: "Getting started",
-		commands: []command{
-			{name: "login", arguments: "<github|gitlab>", summary: "Log in with the selected provider", run: commands.Login},
-			{name: "logout", summary: "Log out of your account", run: commands.Logout},
+		Title: "Getting started",
+		Commands: []commands.Command{
+			{Name: "login", Arguments: "<github|gitlab>", Summary: "Log in with the selected provider", Run: commands.Login},
+			{Name: "logout", Summary: "Log out of your account", Run: commands.Logout},
 		},
 	},
 	{
-		title: "Fleets",
-		commands: []command{
-			{name: "fleet create", arguments: "<name>", summary: "Create a fleet", run: commands.FleetCreate},
-			{name: "fleet list", arguments: "[--json]", summary: "List the fleets you can reach", run: commands.FleetList},
-			{name: "fleet rename", arguments: "<fleet_id> <new_name>", summary: "Rename a fleet", run: commands.FleetRename},
-			{name: "fleet transfer", arguments: "<fleet_id> <email>", summary: "Hand a fleet to a new owner", run: commands.FleetTransfer},
-			{name: "fleet delete", arguments: "<fleet_id>", summary: "Delete a fleet and factory reset its devices", run: commands.FleetDelete},
+		Title: "Fleets",
+		Commands: []commands.Command{
+			{Name: "fleet create", Arguments: "<name>", Summary: "Create a fleet", Run: commands.FleetCreate},
+			{Name: "fleet list", Arguments: "[--json]", Summary: "List the fleets you can reach", Run: commands.FleetList},
+			{Name: "fleet rename", Arguments: "<fleet_id> <new_name>", Summary: "Rename a fleet", Run: commands.FleetRename},
+			{Name: "fleet transfer", Arguments: "<fleet_id> <email>", Summary: "Hand a fleet to a new owner", Run: commands.FleetTransfer},
+			{Name: "fleet delete", Arguments: "<fleet_id>", Summary: "Delete a fleet and factory reset its devices", Run: commands.FleetDelete},
 		},
 	},
 	{
-		title: "Devices",
-		commands: []command{
-			{name: "device claim", arguments: "<imei> <fleet_id> [name]", summary: "Claim a device into a fleet, then press its button", run: commands.DeviceClaim},
-			{name: "device list", arguments: "[fleet_id] [--json]", summary: "List devices, their state, and when they were last seen", run: commands.DeviceList},
-			{name: "device rename", arguments: "<imei> <new_name>", summary: "Rename a device", run: commands.DeviceRename},
-			{name: "device release", arguments: "<imei>", summary: "Unpair a device from its fleet and factory reset it", run: commands.DeviceRelease},
-			{name: "device start", arguments: "<imei>", summary: "Run the code on the target"},
-			{name: "device stop", arguments: "<imei>", summary: "Halt the code on the target"},
-			{name: "device restart", arguments: "<imei>", summary: "Restart the code on the target"},
+		Title: "Devices",
+		Commands: []commands.Command{
+			{Name: "device claim", Arguments: "<imei> <fleet_id> [name]", Summary: "Claim a device into a fleet, then press its button", Run: commands.DeviceClaim},
+			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices, their state, and when they were last seen", Run: commands.DeviceList},
+			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: commands.DeviceRename},
+			{Name: "device release", Arguments: "<imei>", Summary: "Unpair a device from its fleet and factory reset it", Run: commands.DeviceRelease},
+			{Name: "device start", Arguments: "<imei>", Summary: "Run the code on the target"},
+			{Name: "device stop", Arguments: "<imei>", Summary: "Halt the code on the target"},
+			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on the target"},
 		},
 	},
 	{
-		title: "Files",
-		commands: []command{
-			{name: "upload", arguments: "<imei|fleet_id> <file> ...", summary: "Upload files or directories to the target"},
-			{name: "download", arguments: "<imei|fleet_id> <path>", summary: "Download the target's files into <path>"},
-			{name: "dev", arguments: "<imei|fleet_id> <file> ... [--log-file <file>]", summary: "Upload on every change, and tail"},
+		Title: "Files",
+		Commands: []commands.Command{
+			{Name: "upload", Arguments: "<imei|fleet_id> <file> ...", Summary: "Upload files or directories to the target"},
+			{Name: "download", Arguments: "<imei|fleet_id> <path>", Summary: "Download the target's files into <path>"},
+			{Name: "dev", Arguments: "<imei|fleet_id> <file> ... [--log-file <file>]", Summary: "Upload on every change, and tail"},
 		},
 	},
 	{
-		title: "Logs",
-		commands: []command{
-			{name: "tail", arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", summary: "Stream the target's log as it arrives"},
+		Title: "Logs",
+		Commands: []commands.Command{
+			{Name: "tail", Arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", Summary: "Stream the target's log as it arrives"},
 		},
 	},
 	{
-		title: "People",
-		commands: []command{
-			{name: "member add", arguments: "<email> <fleet_id>", summary: "Give someone access to a fleet", run: commands.MemberAdd},
-			{name: "member list", arguments: "<fleet_id> [--json]", summary: "List the people who can reach a fleet", run: commands.MemberList},
-			{name: "member remove", arguments: "<email> <fleet_id>", summary: "Take away someone's access", run: commands.MemberRemove},
+		Title: "People",
+		Commands: []commands.Command{
+			{Name: "member add", Arguments: "<email> <fleet_id>", Summary: "Give someone access to a fleet", Run: commands.MemberAdd},
+			{Name: "member list", Arguments: "<fleet_id> [--json]", Summary: "List the people who can reach a fleet", Run: commands.MemberList},
+			{Name: "member remove", Arguments: "<email> <fleet_id>", Summary: "Take away someone's access", Run: commands.MemberRemove},
 		},
 	},
 	{
-		title: "Keys",
-		commands: []command{
-			{name: "key create", arguments: "<fleet_id> <label>", summary: "Create a key for sending data to a fleet", run: commands.KeyCreate},
-			{name: "key list", arguments: "[fleet_id] [--json]", summary: "List the keys that can reach your fleets", run: commands.KeyList},
-			{name: "key revoke", arguments: "<key_id>", summary: "Stop a key from reaching its fleet", run: commands.KeyRevoke},
+		Title: "Keys",
+		Commands: []commands.Command{
+			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a key for sending data to a fleet", Run: commands.KeyCreate},
+			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the keys that can reach your fleets", Run: commands.KeyList},
+			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a key from reaching its fleet", Run: commands.KeyRevoke},
 		},
 	},
 	{
-		title: "Account",
-		commands: []command{
-			{name: "account balance", arguments: "[fleet_id] [--json]", summary: "Show the credit left on your fleets", run: commands.AccountBalance},
-			{name: "account topup", arguments: "<fleet_id>", summary: "Add credit to a fleet", run: commands.AccountTopup},
-			{name: "account delete", summary: "Delete your account entirely", run: commands.AccountDelete},
+		Title: "Account",
+		Commands: []commands.Command{
+			{Name: "account balance", Arguments: "[fleet_id] [--json]", Summary: "Show the credit left on your fleets", Run: commands.AccountBalance},
+			{Name: "account topup", Arguments: "<fleet_id>", Summary: "Add credit to a fleet", Run: commands.AccountTopup},
+			{Name: "account delete", Summary: "Delete your account entirely", Run: commands.AccountDelete},
 		},
 	},
 	{
-		title: "Superstack",
-		commands: []command{
-			{name: "version", summary: "Show the version"},
-			{name: "help", arguments: "[command]", summary: "Show this help, or help for one command"},
+		Title: "Superstack",
+		Commands: []commands.Command{
+			{Name: "version", Summary: "Show the version"},
+			{Name: "help", Arguments: "[command]", Summary: "Show this help, or help for one command"},
 		},
 	},
-}
-
-func resolve(arguments []string) (command, []string, bool) {
-	longest := command{}
-	longestWords := 0
-
-	for _, section := range sections {
-		for _, candidate := range section.commands {
-			words := strings.Fields(candidate.name)
-
-			if len(words) > len(arguments) || len(words) <= longestWords {
-				continue
-			}
-
-			matches := true
-
-			for index, word := range words {
-				if arguments[index] != word {
-					matches = false
-					break
-				}
-			}
-
-			if !matches {
-				continue
-			}
-
-			longest = candidate
-			longestWords = len(words)
-		}
-	}
-
-	if longestWords == 0 {
-		return command{}, nil, false
-	}
-
-	return longest, arguments[longestWords:], true
-}
-
-func printHelp(writer io.Writer) {
-	widest := 0
-
-	for _, section := range sections {
-		for _, entry := range section.commands {
-			width := len(entry.name)
-
-			if entry.arguments != "" {
-				width += 1 + len(entry.arguments)
-			}
-
-			if width > widest {
-				widest = width
-			}
-		}
-	}
-
-	fmt.Fprintf(writer, "superstack %s\n\n", version)
-	fmt.Fprint(writer, "Usage: superstack <command> [arguments]\n")
-
-	for _, section := range sections {
-		fmt.Fprintf(writer, "\n%s\n", section.title)
-
-		for _, entry := range section.commands {
-			signature := entry.name
-
-			if entry.arguments != "" {
-				signature += " " + entry.arguments
-			}
-
-			fmt.Fprintf(writer, "  %-*s  %s\n", widest, signature, entry.summary)
-		}
-	}
 }
 
 func main() {
-	commands.CliVersion = version
-
-	arguments, err := commands.TakeServerFlag(os.Args[1:])
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)
-		os.Exit(1)
-	}
-
-	if len(arguments) == 0 {
-		printHelp(os.Stdout)
-		return
-	}
-
-	switch arguments[0] {
-	case "-h", "--help":
-		printHelp(os.Stdout)
-		return
-
-	case "-v", "--version":
-		fmt.Println(version)
-		return
-	}
-
-	entry, rest, found := resolve(arguments)
-
-	if !found {
-		fmt.Fprintf(os.Stderr, "superstack: unknown command %q\nRun 'superstack help' for the list.\n", strings.Join(arguments, " "))
-		os.Exit(1)
-	}
-
-	switch entry.name {
-	case "version":
-		fmt.Println(version)
-		return
-
-	case "help":
-		if len(rest) == 0 {
-			printHelp(os.Stdout)
-			return
-		}
-
-		topic, _, topicFound := resolve(rest)
-
-		if !topicFound {
-			fmt.Fprintf(os.Stderr, "superstack: unknown command %q\n", strings.Join(rest, " "))
-			os.Exit(1)
-		}
-
-		signature := topic.name
-
-		if topic.arguments != "" {
-			signature += " " + topic.arguments
-		}
-
-		fmt.Printf("superstack %s\n\n  %s\n", signature, topic.summary)
-		return
-	}
-
-	if entry.run == nil {
-		fmt.Fprintf(os.Stderr, "superstack: %s is not implemented yet\n", entry.name)
-		os.Exit(1)
-	}
-
-	err = commands.CheckServer()
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)
-		os.Exit(1)
-	}
-
-	err = entry.run(rest)
+	err := commands.Dispatch(sections, version, os.Args[1:], os.Stdin, os.Stdout)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "superstack: %s\n", err)

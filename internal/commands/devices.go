@@ -3,9 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 )
 
 type deviceEntry struct {
@@ -18,14 +16,14 @@ type deviceEntry struct {
 	StorageTotal  *int64  `json:"storage_total"`
 }
 
-func fetchDevices() ([]deviceEntry, error) {
-	request, err := authenticatedRequest(http.MethodGet, "/devices", nil)
+func fetchDevices(session Session) ([]deviceEntry, error) {
+	request, err := authenticatedRequest(session, http.MethodGet, "/devices", nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return nil, fmt.Errorf("the server could not be reached: %w", err)
@@ -34,9 +32,7 @@ func fetchDevices() ([]deviceEntry, error) {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return nil, fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return nil, serverError(response)
 	}
 
 	devices := []deviceEntry{}

@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
-func MemberAdd(arguments []string) error {
+func MemberAdd(session Session, arguments []string) error {
 
 	if len(arguments) != 2 || arguments[0] == "" {
 		return errors.New("member add takes an email address and a fleet id")
@@ -31,7 +29,7 @@ func MemberAdd(arguments []string) error {
 		return err
 	}
 
-	request, err := authenticatedRequest(http.MethodPost,
+	request, err := authenticatedRequest(session, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members", bytes.NewReader(body))
 
 	if err != nil {
@@ -40,7 +38,7 @@ func MemberAdd(arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -49,12 +47,10 @@ func MemberAdd(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
-	fmt.Printf("Gave %s access.\n", email)
+	fmt.Fprintf(session.Out, "Gave %s access.\n", email)
 
 	return nil
 }

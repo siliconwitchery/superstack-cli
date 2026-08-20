@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,14 +14,8 @@ import (
 	"time"
 )
 
-var githubBase = "https://github.com"
-var gitlabBase = "https://gitlab.com"
-
-var oauthClient = &http.Client{Timeout: 30 * time.Second}
-
-var minimumPollInterval = 5
-
-func Login(arguments []string) error {
+func Login(session Session, arguments []string) error {
+	oauthClient := &http.Client{Timeout: 30 * time.Second}
 
 	if len(arguments) != 1 || (arguments[0] != "github" && arguments[0] != "gitlab") {
 		return errors.New("login takes a provider: github or gitlab")
@@ -31,13 +24,13 @@ func Login(arguments []string) error {
 	provider := arguments[0]
 
 	// Ask the server which oauth apps to log in against
-	providersRequest, err := apiRequest(http.MethodGet, "/login", nil)
+	providersRequest, err := apiRequest(session, http.MethodGet, "/login", nil)
 
 	if err != nil {
 		return err
 	}
 
-	providersResponse, err := apiClient.Do(providersRequest)
+	providersResponse, err := session.Client.Do(providersRequest)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -46,9 +39,7 @@ func Login(arguments []string) error {
 	defer providersResponse.Body.Close()
 
 	if providersResponse.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(providersResponse.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(providersResponse)
 	}
 
 	providers := struct {
@@ -68,14 +59,14 @@ func Login(arguments []string) error {
 	switch provider {
 	case "github":
 		clientId = providers.GithubClientId
-		deviceCodeUrl = githubBase + "/login/device/code"
-		pollUrl = githubBase + "/login/oauth/access_token"
+		deviceCodeUrl = session.GithubBase + "/login/device/code"
+		pollUrl = session.GithubBase + "/login/oauth/access_token"
 		scope = "user:email"
 
 	case "gitlab":
 		clientId = providers.GitlabClientId
-		deviceCodeUrl = gitlabBase + "/oauth/authorize_device"
-		pollUrl = gitlabBase + "/oauth/token"
+		deviceCodeUrl = session.GitlabBase + "/oauth/authorize_device"
+		pollUrl = session.GitlabBase + "/oauth/token"
 		scope = "read_user"
 	}
 
@@ -133,34 +124,33 @@ func Login(arguments []string) error {
 		enterAt = code.VerificationUriComplete
 	}
 
-	fmt.Printf("Copy your one-time code: %s\n", code.UserCode)
-	fmt.Printf("Then enter it at %s\n", enterAt)
-	fmt.Println("Press enter to open the browser.")
-
-	// The read sits in a goroutine so an unpressed key never stalls the
-	// poll: the code may just as well be entered on another device. The
-	// stream is captured here, because the goroutine outlives the read and
-	// must not touch os.Stdin once something else may have replaced it.
-	prompt := os.Stdin
+	fmt.Fprintf(session.Out, "Copy your one-time code: %s\n", code.UserCode)
+	fmt.Fprintf(session.Out, "Then enter it at %s\n", enterAt)
+	fmt.Fprintln(session.Out, "Press enter to open the browser.")
 
 	go func() {
-		_, err := bufio.NewReader(prompt).ReadString('\n')
+		_, err := bufio.NewReader(session.In).ReadString('\n')
 
 		if err == nil {
-			openBrowser(enterAt)
+			session.OpenBrowser(enterAt)
 		}
 	}()
 
 	// Poll until the code is entered
 	deadline := time.Now().Add(time.Duration(code.ExpiresIn) * time.Second)
 
+	const defaultPollInterval = 5
 	interval := code.Interval
+
+	if interval <= 0 {
+		interval = defaultPollInterval
+	}
 
 	accessToken := ""
 
 	for accessToken == "" {
 
-		time.Sleep(time.Duration(max(interval, minimumPollInterval)) * time.Second)
+		time.Sleep(time.Duration(interval) * time.Second)
 
 		if time.Now().After(deadline) {
 			return errors.New("the code expired before it was entered, run login again")
@@ -191,7 +181,6 @@ func Login(arguments []string) error {
 		poll := struct {
 			AccessToken string `json:"access_token"`
 			Error       string `json:"error"`
-			Interval    int    `json:"interval"`
 		}{}
 
 		err = json.NewDecoder(pollResponse.Body).Decode(&poll)
@@ -213,11 +202,7 @@ func Login(arguments []string) error {
 		case "authorization_pending":
 
 		case "slow_down":
-			if poll.Interval > 0 {
-				interval = poll.Interval
-			} else {
-				interval += 5
-			}
+			interval += 5
 
 		case "expired_token":
 			return errors.New("the code expired before it was entered, run login again")
@@ -240,7 +225,7 @@ func Login(arguments []string) error {
 		return err
 	}
 
-	loginRequest, err := apiRequest(http.MethodPost, "/login", bytes.NewReader(loginBody))
+	loginRequest, err := apiRequest(session, http.MethodPost, "/login", bytes.NewReader(loginBody))
 
 	if err != nil {
 		return err
@@ -248,7 +233,7 @@ func Login(arguments []string) error {
 
 	loginRequest.Header.Set("Content-Type", "application/json")
 
-	loginResponse, err := apiClient.Do(loginRequest)
+	loginResponse, err := session.Client.Do(loginRequest)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -257,9 +242,7 @@ func Login(arguments []string) error {
 	defer loginResponse.Body.Close()
 
 	if loginResponse.StatusCode != http.StatusOK {
-		message, _ := io.ReadAll(io.LimitReader(loginResponse.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(loginResponse)
 	}
 
 	login := struct {
@@ -296,7 +279,7 @@ func Login(arguments []string) error {
 		return err
 	}
 
-	fmt.Printf("Logged in as %s.\n", login.Email)
+	fmt.Fprintf(session.Out, "Logged in as %s.\n", login.Email)
 
 	return nil
 }

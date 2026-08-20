@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 )
 
-func KeyRevoke(arguments []string) error {
+func KeyRevoke(session Session, arguments []string) error {
 
 	if len(arguments) != 1 {
 		return errors.New("key revoke takes a key id")
@@ -23,7 +21,7 @@ func KeyRevoke(arguments []string) error {
 		return errors.New("the key id is the number shown by key list")
 	}
 
-	keys, err := fetchKeys()
+	keys, err := fetchKeys(session)
 
 	if err != nil {
 		return err
@@ -43,25 +41,25 @@ func KeyRevoke(arguments []string) error {
 		return errors.New("no such key")
 	}
 
-	fmt.Printf("Revoke %q? Anything still using it stops reaching the fleet. [y/N] ", label)
+	fmt.Fprintf(session.Out, "Revoke %q? Anything still using it stops reaching the fleet. [y/N] ", label)
 
-	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Println("Nothing revoked.")
+		fmt.Fprintln(session.Out, "Nothing revoked.")
 		return nil
 	}
 
-	request, err := authenticatedRequest(http.MethodDelete,
+	request, err := authenticatedRequest(session, http.MethodDelete,
 		"/keys/"+strconv.FormatInt(keyId, 10), nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := apiClient.Do(request)
+	response, err := session.Client.Do(request)
 
 	if err != nil {
 		return fmt.Errorf("the server could not be reached: %w", err)
@@ -70,12 +68,10 @@ func KeyRevoke(arguments []string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusNoContent {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-
-		return fmt.Errorf("the server said: %s", strings.TrimSpace(string(message)))
+		return serverError(response)
 	}
 
-	fmt.Printf("Revoked key %d.\n", keyId)
+	fmt.Fprintf(session.Out, "Revoked key %d.\n", keyId)
 
 	return nil
 }

@@ -4,24 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 )
 
-func AccountBalance(arguments []string) error {
+func AccountBalance(session Session, arguments []string) error {
 
-	jsonOutput := false
-
-	positionals := []string{}
-
-	for _, argument := range arguments {
-		if argument == "--json" {
-			jsonOutput = true
-			continue
-		}
-
-		positionals = append(positionals, argument)
-	}
+	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
 		return errors.New("account balance takes at most one fleet id")
@@ -39,7 +27,7 @@ func AccountBalance(arguments []string) error {
 		chosenFleetId = parsed
 	}
 
-	fleets, err := fetchFleets()
+	fleets, err := fetchFleets(session)
 
 	if err != nil {
 		return err
@@ -57,7 +45,7 @@ func AccountBalance(arguments []string) error {
 		}
 	}
 
-	fetched, err := fetchBalances()
+	fetched, err := fetchBalances(session)
 
 	if err != nil {
 		return err
@@ -72,11 +60,11 @@ func AccountBalance(arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(os.Stdout).Encode(balances)
+		return json.NewEncoder(session.Out).Encode(balances)
 	}
 
 	if len(balances) == 0 {
-		fmt.Println("No fleets yet. Create one with fleet create.")
+		fmt.Fprintln(session.Out, "No fleets yet. Create one with fleet create.")
 		return nil
 	}
 
@@ -88,10 +76,10 @@ func AccountBalance(arguments []string) error {
 		nameWidth = max(nameWidth, len(fleetNames[balance.Fleet]))
 	}
 
-	fmt.Printf("%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
+	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
 
 	for _, balance := range balances {
-		fmt.Printf("%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, fleetNames[balance.Fleet], formatBalance(balance))
+		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, fleetNames[balance.Fleet], formatBalance(balance))
 	}
 
 	return nil

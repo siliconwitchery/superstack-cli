@@ -80,11 +80,11 @@ func TestKeyList(t *testing.T) {
 				fmt.Fprint(w, keys)
 			})
 
-			loggedInTestServer(t, mux)
+			session, out := loggedInSession(t, mux)
 
-			printed, err := captureStdout(t, func() error {
-				return KeyList(test.arguments)
-			})
+			err := KeyList(session, test.arguments)
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
