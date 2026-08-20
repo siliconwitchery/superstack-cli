@@ -1,7 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+
+	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
 )
 
 func TestCommandTable(t *testing.T) {
@@ -71,5 +80,126 @@ func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
 
 	for name := range answeredByDispatch {
 		t.Errorf("%q is answered by dispatch but not in the table", name)
+	}
+}
+
+func TestNoPartImportsAnother(t *testing.T) {
+	const module = "github.com/siliconwitchery/superstack-cli/internal/"
+	const fixtures = "api/apitest"
+
+	// The graph docs/cli.md publishes: a part reaches api and nothing else,
+	// and only main reaches dispatch.
+	allowed := map[string][]string{
+		"api":         {},
+		"api/apitest": {"api"},
+		"dispatch":    {"api"},
+		"account":     {"api"},
+		"device":      {"api"},
+		"fleet":       {"api"},
+		"key":         {"api"},
+		"login":       {"api"},
+		"member":      {"api"},
+	}
+
+	walk := func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		owner := filepath.ToSlash(strings.TrimPrefix(filepath.Dir(path), "internal"+string(filepath.Separator)))
+
+		permitted, known := allowed[owner]
+
+		if !known {
+			t.Errorf("%s is a package the graph does not mention, add it to docs/cli.md and to this test", owner)
+			return nil
+		}
+
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+
+		if err != nil {
+			return err
+		}
+
+		for _, imported := range file.Imports {
+			target := strings.Trim(imported.Path.Value, `"`)
+
+			if !strings.HasPrefix(target, module) {
+				continue
+			}
+
+			target = strings.TrimPrefix(target, module)
+
+			if target == owner || slices.Contains(permitted, target) {
+				continue
+			}
+
+			if target == fixtures && strings.HasSuffix(path, "_test.go") {
+				continue
+			}
+
+			t.Errorf("%s imports %s, which the layout does not allow", path, target)
+		}
+
+		return nil
+	}
+
+	err := filepath.WalkDir("internal", walk)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTheTableWiresEveryCommandOffered(t *testing.T) {
+	wired := []string{
+		"account balance", "account delete", "account topup",
+		"device claim", "device list", "device release", "device rename",
+		"fleet create", "fleet delete", "fleet list", "fleet rename", "fleet transfer",
+		"key create", "key list", "key revoke",
+		"login", "logout",
+		"member add", "member list", "member remove",
+	}
+
+	offered := []string{}
+
+	for _, section := range sections {
+		for _, entry := range section.Commands {
+			if entry.Run != nil {
+				offered = append(offered, entry.Name)
+			}
+		}
+	}
+
+	slices.Sort(offered)
+
+	if !slices.Equal(offered, wired) {
+		t.Errorf("the table wires %v, want %v", offered, wired)
+	}
+}
+
+func TestHelpRendersTheRealTable(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	err := dispatch.Dispatch(sections, version, []string{"help"}, strings.NewReader(""), out)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, section := range sections {
+		if !strings.Contains(out.String(), section.Title) {
+			t.Errorf("help leaves out the %q section", section.Title)
+		}
+
+		for _, entry := range section.Commands {
+			if !strings.Contains(out.String(), entry.Name) {
+				t.Errorf("help leaves out %q", entry.Name)
+			}
+		}
 	}
 }

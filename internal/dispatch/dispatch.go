@@ -187,12 +187,6 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 		return fmt.Errorf("%s is not available yet", entry.Name)
 	}
 
-	err = api.CheckServer(session)
-
-	if err != nil {
-		return err
-	}
-
 	err = entry.Run(session, rest)
 
 	return err

@@ -156,6 +156,20 @@ func Delete(session api.Session, arguments []string) error {
 		return errors.New("account delete takes no arguments")
 	}
 
+	request, err := api.AuthenticatedRequest(session, http.MethodGet, "/", nil)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := session.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your connection")
+	}
+
+	response.Body.Close()
+
 	fmt.Fprint(session.Out, "Delete your account, its logins, and your access to every fleet? This cannot be undone. [y/N] ")
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
@@ -167,13 +181,13 @@ func Delete(session api.Session, arguments []string) error {
 		return nil
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodDelete, "/account", nil)
+	request, err = api.AuthenticatedRequest(session, http.MethodDelete, "/account", nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err = session.Client.Do(request)
 
 	if err != nil {
 		return errors.New("the server could not be reached, check your connection")
