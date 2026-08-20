@@ -60,7 +60,14 @@ static binary for managing Superstack from a terminal.
     ./superstack
     ```
 
-1. Run the checks:
+1. Run the fast tests while you work. The login tests wait real seconds for
+   the poll interval, and `-short` skips them:
+
+    ```sh
+    CGO_ENABLED=0 go test -short ./...
+    ```
+
+1. Run every check before opening a pull request:
 
     ```sh
     gofmt -l .
