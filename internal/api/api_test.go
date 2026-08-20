@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -103,38 +102,6 @@ func TestApiRequestBase(t *testing.T) {
 			// The server's version gate parses this exact User-Agent shape.
 			if request.Header.Get("User-Agent") != "superstack/1.2.3" {
 				t.Errorf("User-Agent = %q, want superstack/1.2.3", request.Header.Get("User-Agent"))
-			}
-		})
-	}
-}
-
-func TestCheckServer(t *testing.T) {
-	reachable := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	t.Cleanup(reachable.Close)
-
-	unreachable := httptest.NewServer(http.NotFoundHandler())
-	unreachable.Close()
-	tests := []struct {
-		name      string
-		base      string
-		wantError string
-	}{
-		{name: "reachable", base: reachable.URL},
-		{name: "unreachable", base: unreachable.URL, wantError: "the server could not be reached, check your connection"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			session := api.NewSession(test.base, "test", strings.NewReader(""), &bytes.Buffer{})
-
-			err := api.CheckServer(session)
-
-			if test.wantError != "" {
-				if err == nil || err.Error() != test.wantError {
-					t.Fatalf("error = %v, want %q", err, test.wantError)
-				}
-			} else if err != nil {
-				t.Fatal(err)
 			}
 		})
 	}

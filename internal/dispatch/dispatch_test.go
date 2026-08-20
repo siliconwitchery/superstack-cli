@@ -3,8 +3,6 @@ package dispatch
 import (
 	"bytes"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -164,10 +162,6 @@ func TestResolve(t *testing.T) {
 }
 
 func TestDispatch(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-
-	t.Cleanup(server.Close)
-
 	sections := []Section{
 		{Title: "Things", Commands: []Command{
 			{Name: "thing list", Arguments: "<id>", Summary: "List a thing", Run: func(session api.Session, arguments []string) error {
@@ -211,10 +205,9 @@ func TestDispatch(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			arguments := append([]string{"--server", server.URL}, test.arguments...)
 			out := &bytes.Buffer{}
 
-			err := Dispatch(sections, "1.2.3", arguments, strings.NewReader(""), out)
+			err := Dispatch(sections, "1.2.3", test.arguments, strings.NewReader(""), out)
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {

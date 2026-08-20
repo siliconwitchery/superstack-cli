@@ -11,24 +11,6 @@ import (
 	"strings"
 )
 
-func CheckServer(session Session) error {
-	request, err := Request(session, http.MethodGet, "/", nil)
-
-	if err != nil {
-		return err
-	}
-
-	response, err := session.Client.Do(request)
-
-	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
-	}
-
-	response.Body.Close()
-
-	return nil
-}
-
 func Request(session Session, method string, path string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, strings.TrimSuffix(session.Base, "/")+path, body)
 
