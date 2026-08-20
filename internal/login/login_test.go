@@ -296,10 +296,6 @@ func TestLogin(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if testing.Short() && (len(test.pollAnswers) > 0 || strings.Contains(test.deviceAnswer, `"expires_in":0`)) {
-				t.Skip("the poll loop waits real seconds")
-			}
-
 			apitest.IsolateKeyStorage(t)
 
 			deviceInterval := test.deviceInterval

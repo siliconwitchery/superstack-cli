@@ -1,8 +1,10 @@
 # Superstack CLI
 
-`superstack` is the command line interface to Superstack: log in, claim
-devices, upload Lua code, and stream logs from your fleet. It is a single
-static binary for managing Superstack from a terminal.
+`superstack` is the command line interface to Superstack: log in, create
+fleets, claim devices, and manage who can reach them. It is a single static
+binary for managing Superstack from a terminal.
+
+Uploading Lua code and streaming logs are not available yet.
 
 ## Install
 
@@ -60,11 +62,11 @@ static binary for managing Superstack from a terminal.
     ./superstack
     ```
 
-1. Run the fast tests while you work. The login tests wait real seconds for
-   the poll interval, and `-short` skips them:
+1. Run the tests while you work. Go caches per package, so a change to one
+   part leaves every other part cached:
 
     ```sh
-    CGO_ENABLED=0 go test -short ./...
+    CGO_ENABLED=0 go test ./...
     ```
 
 1. Run every check before opening a pull request:
