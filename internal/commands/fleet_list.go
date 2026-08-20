@@ -2,16 +2,16 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 )
 
 func FleetList(session Session, arguments []string) error {
-
 	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) != 0 {
-		return fmt.Errorf("fleet list takes no arguments, only --json")
+		return errors.New("fleet list takes no arguments")
 	}
 
 	fleets, err := fetchFleets(session)

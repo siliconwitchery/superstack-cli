@@ -13,6 +13,7 @@ import (
 func TestLogout(t *testing.T) {
 	tests := []struct {
 		name           string
+		arguments      []string
 		storedKey      string
 		serverDown     bool
 		revokeStatus   int
@@ -21,6 +22,11 @@ func TestLogout(t *testing.T) {
 		wantKeyKept    bool
 		wantShown      string
 	}{
+		{
+			name:      "arguments are refused",
+			arguments: []string{"now"},
+			wantError: "logout takes no arguments",
+		},
 		{
 			name:           "revokes and forgets the stored key",
 			storedKey:      "ssk_test",
@@ -94,7 +100,7 @@ func TestLogout(t *testing.T) {
 				}
 			}
 
-			err = Logout(session, nil)
+			err = Logout(session, test.arguments)
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {

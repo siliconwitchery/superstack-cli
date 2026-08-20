@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pollAnswers []string) (*[]time.Time, string) {
+func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, deviceAnswer string, pollAnswers []string) (*[]time.Time, string) {
 	t.Helper()
 
 	devicePath := "/login/device/code"
@@ -32,8 +32,7 @@ func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pol
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST "+devicePath, func(w http.ResponseWriter, r *http.Request) {
-		// Real github answers form-encoded without this header, so a client
-		// that drops it must fail here too.
+		// Real github answers form-encoded unless this header is present.
 		if r.Header.Get("Accept") != "application/json" {
 			t.Error("the device code request does not accept json")
 			http.Error(w, "not acceptable", http.StatusNotAcceptable)
@@ -44,6 +43,11 @@ func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pol
 
 		if r.PostForm.Get("client_id") != wantClientId || r.PostForm.Get("scope") != wantScope {
 			http.Error(w, "wrong form", http.StatusBadRequest)
+			return
+		}
+
+		if deviceAnswer != "" {
+			fmt.Fprint(w, deviceAnswer)
 			return
 		}
 
@@ -104,12 +108,17 @@ func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, pol
 	return polledAt, server.URL
 }
 
-func fakeSuperstack(t *testing.T) (Session, *bytes.Buffer) {
+func fakeSuperstack(t *testing.T, providersRefusal string, loginAnswer string) (Session, *bytes.Buffer) {
 	t.Helper()
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
+		if providersRefusal != "" {
+			http.Error(w, providersRefusal, http.StatusServiceUnavailable)
+			return
+		}
+
 		fmt.Fprint(w, `{
 			"github_client_id": "test-github-client",
 			"gitlab_client_id": "test-gitlab-client"
@@ -132,6 +141,11 @@ func fakeSuperstack(t *testing.T) (Session, *bytes.Buffer) {
 			return
 		}
 
+		if loginAnswer != "" {
+			fmt.Fprint(w, loginAnswer)
+			return
+		}
+
 		fmt.Fprint(w, `{"key": "ssk_test", "email": "someone@example.com"}`)
 	})
 
@@ -151,10 +165,50 @@ func TestLogin(t *testing.T) {
 		name           string
 		provider       string
 		deviceInterval int
+		deviceAnswer   string
 		pollAnswers    []string
+		providersError string
+		loginAnswer    string
 		wantError      string
 		wantPollGap    time.Duration
 	}{
+		{
+			name:           "superstack refuses the provider list",
+			provider:       "github",
+			providersError: "login unavailable",
+			wantError:      "login unavailable",
+		},
+		{
+			name:         "provider refuses the device code",
+			provider:     "github",
+			deviceAnswer: `{"error":"access_denied"}`,
+			wantError:    "github would not start the login, try again",
+		},
+		{
+			name:         "deadline passes before approval",
+			provider:     "github",
+			deviceAnswer: `{"device_code":"test-device-code","user_code":"WDJB-MJHT","verification_uri":"https://example.com/device","expires_in":0,"interval":1}`,
+			wantError:    "the code expired before it was entered, run login again",
+		},
+		{
+			name:        "poll has neither an error nor a token",
+			provider:    "github",
+			pollAnswers: []string{`{}`},
+			wantError:   "the login did not complete on github, run login again",
+		},
+		{
+			name:        "poll has an unrecognised error",
+			provider:    "github",
+			pollAnswers: []string{`{"error":"server_error"}`},
+			wantError:   "the login did not complete on github, run login again",
+		},
+		{
+			name:        "superstack returns an empty key",
+			provider:    "github",
+			pollAnswers: []string{`{"access_token":"gho_test"}`},
+			loginAnswer: `{"key":"","email":"someone@example.com"}`,
+			wantError:   "the login did not complete",
+		},
 		{
 			name:        "github approved on the first poll",
 			provider:    "github",
@@ -246,8 +300,8 @@ func TestLogin(t *testing.T) {
 				deviceInterval = 1
 			}
 
-			polledAt, providerBase := fakeProviderForLogin(t, test.provider, deviceInterval, test.pollAnswers)
-			session, _ := fakeSuperstack(t)
+			polledAt, providerBase := fakeProviderForLogin(t, test.provider, deviceInterval, test.deviceAnswer, test.pollAnswers)
+			session, _ := fakeSuperstack(t, test.providersError, test.loginAnswer)
 
 			if test.provider == "gitlab" {
 				session.GitlabBase = providerBase
@@ -319,8 +373,8 @@ func TestLogin(t *testing.T) {
 func TestLoginOpensTheBrowserOnEnter(t *testing.T) {
 	isolateKeyStorage(t)
 
-	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, []string{`{"access_token": "glpat-test"}`})
-	session, _ := fakeSuperstack(t)
+	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
+	session, _ := fakeSuperstack(t, "", "")
 	session.GitlabBase = providerBase
 	session.In = strings.NewReader("\n")
 	browserOpens := make(chan string, 1)

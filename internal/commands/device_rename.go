@@ -11,7 +11,7 @@ import (
 
 func DeviceRename(session Session, arguments []string) error {
 	if len(arguments) != 2 {
-		return errors.New("device rename takes an IMEI and a name, quoted if it has spaces")
+		return errors.New("device rename takes an IMEI and a new name, quoted if it has spaces")
 	}
 
 	imei := arguments[0]
@@ -23,7 +23,7 @@ func DeviceRename(session Session, arguments []string) error {
 	name := strings.TrimSpace(arguments[1])
 
 	if name == "" {
-		return errors.New("device rename takes an IMEI and a name, quoted if it has spaces")
+		return errors.New("device rename takes an IMEI and a new name, quoted if it has spaces")
 	}
 
 	body, err := json.Marshal(map[string]string{"name": name})
@@ -43,7 +43,7 @@ func DeviceRename(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

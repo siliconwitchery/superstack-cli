@@ -8,7 +8,6 @@ import (
 )
 
 func KeyList(session Session, arguments []string) error {
-
 	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
@@ -64,7 +63,12 @@ func KeyList(session Session, arguments []string) error {
 	}
 
 	if len(keys) == 0 {
-		fmt.Fprintln(session.Out, "No keys yet. Create one with key create.")
+		if chosenFleetId == 0 {
+			fmt.Fprintln(session.Out, "No keys yet. Create one with key create.")
+		} else {
+			fmt.Fprintln(session.Out, "No keys in that fleet.")
+		}
+
 		return nil
 	}
 

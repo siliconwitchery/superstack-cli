@@ -33,7 +33,7 @@ func Login(session Session, arguments []string) error {
 	providersResponse, err := session.Client.Do(providersRequest)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer providersResponse.Body.Close()
@@ -93,7 +93,7 @@ func Login(session Session, arguments []string) error {
 	codeResponse, err := oauthClient.Do(codeRequest)
 
 	if err != nil {
-		return fmt.Errorf("%s could not be reached: %w", provider, err)
+		return fmt.Errorf("%s could not be reached, check your connection", provider)
 	}
 
 	defer codeResponse.Body.Close()
@@ -111,11 +111,11 @@ func Login(session Session, arguments []string) error {
 	err = json.NewDecoder(codeResponse.Body).Decode(&code)
 
 	if err != nil {
-		return fmt.Errorf("%s answered %s to the device code request", provider, codeResponse.Status)
+		return fmt.Errorf("%s would not start the login, try again", provider)
 	}
 
 	if code.Error != "" || code.DeviceCode == "" {
-		return fmt.Errorf("%s would not start the login: %s", provider, code.Error)
+		return fmt.Errorf("%s would not start the login, try again", provider)
 	}
 
 	enterAt := code.VerificationUri
@@ -149,7 +149,6 @@ func Login(session Session, arguments []string) error {
 	accessToken := ""
 
 	for accessToken == "" {
-
 		time.Sleep(time.Duration(interval) * time.Second)
 
 		if time.Now().After(deadline) {
@@ -175,7 +174,7 @@ func Login(session Session, arguments []string) error {
 		pollResponse, err := oauthClient.Do(pollRequest)
 
 		if err != nil {
-			return fmt.Errorf("%s could not be reached: %w", provider, err)
+			return fmt.Errorf("%s could not be reached, check your connection", provider)
 		}
 
 		poll := struct {
@@ -188,13 +187,13 @@ func Login(session Session, arguments []string) error {
 		pollResponse.Body.Close()
 
 		if err != nil {
-			return fmt.Errorf("%s answered %s while polling", provider, pollResponse.Status)
+			return fmt.Errorf("%s stopped answering, run login again", provider)
 		}
 
 		switch poll.Error {
 		case "":
 			if poll.AccessToken == "" {
-				return fmt.Errorf("%s approved the login but it did not complete", provider)
+				return fmt.Errorf("the login did not complete on %s, run login again", provider)
 			}
 
 			accessToken = poll.AccessToken
@@ -211,7 +210,7 @@ func Login(session Session, arguments []string) error {
 			return fmt.Errorf("the login was declined on %s", provider)
 
 		default:
-			return fmt.Errorf("%s answered %q while polling", provider, poll.Error)
+			return fmt.Errorf("the login did not complete on %s, run login again", provider)
 		}
 	}
 
@@ -236,7 +235,7 @@ func Login(session Session, arguments []string) error {
 	loginResponse, err := session.Client.Do(loginRequest)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer loginResponse.Body.Close()

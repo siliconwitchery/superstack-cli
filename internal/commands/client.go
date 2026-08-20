@@ -2,7 +2,6 @@ package commands
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -12,8 +11,6 @@ import (
 	"strings"
 )
 
-// Deliberately absent from the help: development needs to point a command at
-// another server, users never do.
 func TakeServerFlag(arguments []string) ([]string, string, error) {
 	remaining := []string{}
 
@@ -23,7 +20,7 @@ func TakeServerFlag(arguments []string) ([]string, string, error) {
 		switch {
 		case arguments[index] == "--server":
 			if index+1 == len(arguments) || arguments[index+1] == "" {
-				return nil, "", errors.New("--server needs a url")
+				return nil, "", errors.New("--server needs an address")
 			}
 
 			index++
@@ -34,7 +31,7 @@ func TakeServerFlag(arguments []string) ([]string, string, error) {
 			base = strings.TrimPrefix(arguments[index], "--server=")
 
 			if base == "" {
-				return nil, "", errors.New("--server needs a url")
+				return nil, "", errors.New("--server needs an address")
 			}
 
 		default:
@@ -55,7 +52,7 @@ func CheckServer(session Session) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server at %s cannot be reached", strings.TrimSuffix(request.URL.String(), "/"))
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	response.Body.Close()
@@ -115,10 +112,10 @@ func serverError(response *http.Response) error {
 	detail := strings.TrimSpace(string(message))
 
 	if err != nil || detail == "" {
-		detail = response.Status
+		return errors.New("that did not go through, try again in a moment")
 	}
 
-	return fmt.Errorf("the server said: %s", detail)
+	return errors.New(detail)
 }
 
 func takeJsonFlag(arguments []string) ([]string, bool) {
@@ -138,14 +135,10 @@ func takeJsonFlag(arguments []string) ([]string, bool) {
 }
 
 func keyPath() (string, error) {
-	// The key is state, not configuration: linux dotfile repos routinely
-	// publish all of ~/.config, so the key must never live there. The mac
-	// and windows config directories are not published like that.
 	if runtime.GOOS == "linux" {
 		stateHome := os.Getenv("XDG_STATE_HOME")
 
-		// The spec says to ignore a relative value, and honoring one could
-		// drop the key inside a repository the user later pushes.
+		// The xdg base directory spec says to ignore a relative XDG_STATE_HOME.
 		if !filepath.IsAbs(stateHome) {
 			home, err := os.UserHomeDir()
 

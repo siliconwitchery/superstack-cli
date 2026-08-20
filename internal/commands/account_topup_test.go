@@ -14,6 +14,7 @@ func TestAccountTopup(t *testing.T) {
 		stdin       string
 		wantPath    string
 		wantBrowser bool
+		emptyBody   bool
 		refusal     string
 		wantError   string
 	}{
@@ -45,11 +46,18 @@ func TestAccountTopup(t *testing.T) {
 			wantError: "shown by fleet list",
 		},
 		{
+			name:      "response has no url",
+			arguments: []string{"3"},
+			wantPath:  "/fleets/3/topup",
+			emptyBody: true,
+			wantError: "could not open the top-up page, try again",
+		},
+		{
 			name:      "the server refuses",
 			arguments: []string{"9"},
 			wantPath:  "/fleets/9/topup",
 			refusal:   "no such fleet",
-			wantError: "the server said: no such fleet",
+			wantError: "no such fleet",
 		},
 	}
 
@@ -64,6 +72,11 @@ func TestAccountTopup(t *testing.T) {
 
 				if test.refusal != "" {
 					http.Error(w, test.refusal, http.StatusNotFound)
+					return
+				}
+
+				if test.emptyBody {
+					fmt.Fprint(w, `{}`)
 					return
 				}
 
@@ -94,6 +107,10 @@ func TestAccountTopup(t *testing.T) {
 
 			if !strings.Contains(printed, "https://checkout.stripe.com/c/pay/cs_test_1") {
 				t.Errorf("the output %q does not show the payment link", printed)
+			}
+
+			if !strings.Contains(printed, "The credit appears on the balance once the top-up completes.") {
+				t.Errorf("the output %q does not explain when the top-up appears", printed)
 			}
 
 			select {

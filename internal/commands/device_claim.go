@@ -44,10 +44,10 @@ func DeviceClaim(session Session, arguments []string) error {
 	}
 
 	if fleetName == "" {
-		return errors.New("the fleet id is the number shown by fleet list")
+		return errors.New("no such fleet")
 	}
 
-	fmt.Fprintln(session.Out, "Press the button on the device to finish claiming it.")
+	fmt.Fprintln(session.Out, "Press the pairing button on the device to finish claiming it.")
 
 	payload := map[string]string{"imei": imei}
 
@@ -73,7 +73,7 @@ func DeviceClaim(session Session, arguments []string) error {
 	response, err := claimClient.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

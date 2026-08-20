@@ -55,7 +55,7 @@ func DeviceRelease(session Session, arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fmt.Fprintf(session.Out, "Release the device from %q? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] ", fleetName)
+	fmt.Fprintf(session.Out, "Release the device from %q? It erases everything on the device, and claiming it again means pressing its pairing button in person. [y/N] ", fleetName)
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
@@ -75,7 +75,7 @@ func DeviceRelease(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

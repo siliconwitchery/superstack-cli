@@ -68,7 +68,6 @@ func TestFleetDelete(t *testing.T) {
 					t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
 				}
 
-				// A refused delete must never claim the fleet is gone
 				if strings.Contains(printed, "Deleted") {
 					t.Errorf("the output %q says the fleet was deleted although the server refused", printed)
 				}
@@ -92,18 +91,25 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 	tests := []struct {
 		name       string
 		balance    string
-		wantPrompt string
+		wantOutput string
 		wantAbsent string
 	}{
 		{
 			name:       "remaining credit is stated",
 			balance:    `[{"fleet":3,"balance":"12.340000","currency":"eur"}]`,
-			wantPrompt: "forfeit its remaining €12.34 of credit",
+			wantOutput: "Delete \"pilot\", release its devices, and forfeit its remaining €12.34 of credit? It erases them all, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 		},
 		{
 			name:       "an empty balance stays quiet",
 			balance:    `[{"fleet":3,"balance":"0","currency":"eur"}]`,
+			wantOutput: "Delete \"pilot\" and release its devices? It erases them all, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 			wantAbsent: "forfeit",
+		},
+		{
+			name:       "an unparseable balance warns without an amount",
+			balance:    `[{"fleet":3,"balance":"15,00","currency":"eur"}]`,
+			wantOutput: "Delete \"pilot\", release its devices, and forfeit its remaining credit? It erases them all, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantAbsent: "€",
 		},
 	}
 
@@ -131,12 +137,11 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if test.wantPrompt != "" && !strings.Contains(printed, test.wantPrompt) {
-				t.Errorf("the prompt %q does not state %q", printed, test.wantPrompt)
+			if printed != test.wantOutput {
+				t.Errorf("output = %q, want %q", printed, test.wantOutput)
 			}
 
-			// Both prompts warn what the delete does to the devices
-			if !strings.Contains(printed, "It erases them all, and claiming one again means pressing its button in person.") {
+			if !strings.Contains(printed, "It erases them all, and claiming one again means pressing its pairing button in person.") {
 				t.Errorf("the prompt %q does not say the devices are erased", printed)
 			}
 

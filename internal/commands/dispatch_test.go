@@ -2,6 +2,9 @@ package commands
 
 import (
 	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -63,6 +66,74 @@ func TestResolve(t *testing.T) {
 		if !slices.Equal(rest, test.rest) {
 			t.Errorf("resolve(%q) rest = %q, want %q", test.arguments, rest, test.rest)
 		}
+	}
+}
+
+func TestDispatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	t.Cleanup(server.Close)
+
+	sections := []Section{
+		{Title: "Things", Commands: []Command{
+			{Name: "thing list", Arguments: "<id>", Summary: "List a thing", Run: func(session Session, arguments []string) error {
+				fmt.Fprintln(session.Out, "Listed.")
+				return nil
+			}},
+			{Name: "thing pending", Summary: "Wait for a thing"},
+		}},
+		{Title: "Superstack", Commands: []Command{
+			{Name: "version", Summary: "Show the version"},
+			{Name: "help", Arguments: "[command]", Summary: "Show help"},
+		}},
+	}
+	wantHelp := "superstack 1.2.3\n\n" +
+		"Usage: superstack <command> [arguments]\n\n" +
+		"Things\n" +
+		"  thing list <id>  List a thing\n" +
+		"  thing pending    Wait for a thing\n\n" +
+		"Superstack\n" +
+		"  version          Show the version\n" +
+		"  help [command]   Show help\n"
+	tests := []struct {
+		name       string
+		arguments  []string
+		wantOutput string
+		wantError  string
+	}{
+		{name: "no arguments", wantOutput: wantHelp},
+		{name: "short help flag", arguments: []string{"-h"}, wantOutput: wantHelp},
+		{name: "long help flag", arguments: []string{"--help"}, wantOutput: wantHelp},
+		{name: "short version flag", arguments: []string{"-v"}, wantOutput: "1.2.3\n"},
+		{name: "long version flag", arguments: []string{"--version"}, wantOutput: "1.2.3\n"},
+		{name: "version command", arguments: []string{"version"}, wantOutput: "1.2.3\n"},
+		{name: "help command", arguments: []string{"help"}, wantOutput: wantHelp},
+		{name: "topic help", arguments: []string{"help", "thing", "list"}, wantOutput: "superstack thing list <id>\n\n  List a thing\n"},
+		{name: "unknown help topic", arguments: []string{"help", "missing"}, wantError: "unknown command \"missing\"\nRun 'superstack help' for the list."},
+		{name: "unknown command", arguments: []string{"missing"}, wantError: "unknown command \"missing\"\nRun 'superstack help' for the list."},
+		{name: "unavailable command", arguments: []string{"thing", "pending"}, wantError: "thing pending is not available yet"},
+		{name: "runnable command", arguments: []string{"thing", "list", "3"}, wantOutput: "Listed.\n"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			arguments := append([]string{"--server", server.URL}, test.arguments...)
+			out := &bytes.Buffer{}
+
+			err := Dispatch(sections, "1.2.3", arguments, strings.NewReader(""), out)
+
+			if test.wantError != "" {
+				if err == nil || err.Error() != test.wantError {
+					t.Fatalf("error = %v, want %q", err, test.wantError)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+
+			if out.String() != test.wantOutput {
+				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
+			}
+		})
 	}
 }
 

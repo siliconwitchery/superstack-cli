@@ -21,6 +21,7 @@ func TestKeyList(t *testing.T) {
 		wantShown  []string
 		wantHidden []string
 		wantError  string
+		keys       string
 	}{
 		{
 			name:      "every fleet's keys",
@@ -34,9 +35,15 @@ func TestKeyList(t *testing.T) {
 			wantHidden: []string{"skunkworks", "f9hjk", "lab sensor"},
 		},
 		{
+			name:      "no keys",
+			arguments: []string{},
+			wantShown: []string{"No keys yet. Create one with key create."},
+			keys:      `[]`,
+		},
+		{
 			name:       "a fleet without keys",
 			arguments:  []string{"5"},
-			wantShown:  []string{"No keys yet"},
+			wantShown:  []string{"No keys in that fleet."},
 			wantHidden: []string{"ID  FLEET"},
 		},
 		{
@@ -70,6 +77,12 @@ func TestKeyList(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			servedKeys := test.keys
+
+			if servedKeys == "" {
+				servedKeys = keys
+			}
+
 			mux := http.NewServeMux()
 
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +90,7 @@ func TestKeyList(t *testing.T) {
 			})
 
 			mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, keys)
+				fmt.Fprint(w, servedKeys)
 			})
 
 			session, out := loggedInSession(t, mux)

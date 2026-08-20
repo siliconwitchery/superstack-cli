@@ -10,7 +10,6 @@ import (
 )
 
 func FleetTransfer(session Session, arguments []string) error {
-
 	if len(arguments) != 2 || arguments[1] == "" {
 		return errors.New("fleet transfer takes a fleet id and an email address")
 	}
@@ -41,7 +40,7 @@ func FleetTransfer(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

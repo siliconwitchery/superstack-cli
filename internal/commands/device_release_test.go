@@ -11,25 +11,33 @@ func TestDeviceRelease(t *testing.T) {
 	tests := []struct {
 		name         string
 		answer       string
+		fleets       string
 		refusal      string
 		wantReleased bool
 		wantOutput   string
 		wantError    string
 	}{
-		{"confirmed", "yes\n", "", true, "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] Released the device.\n", ""},
-		{"declined", "n\n", "", false, "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its button in person. [y/N] Nothing released.\n", ""},
-		{"server refuses", "y\n", "no such device", true, "", "the server said: no such device"},
+		{name: "confirmed", answer: "yes\n", wantReleased: true, wantOutput: "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its pairing button in person. [y/N] Released the device.\n"},
+		{name: "declined", answer: "n\n", wantOutput: "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its pairing button in person. [y/N] Nothing released.\n"},
+		{name: "server refuses", answer: "y\n", refusal: "no such device", wantReleased: true, wantError: "no such device"},
+		{name: "device belongs to an inaccessible fleet", fleets: `[]`, wantError: "no such device, device list shows yours"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			releasedPath := ""
+			fleets := test.fleets
+
+			if fleets == "" {
+				fleets = `[{"id":3,"name":"pilot","owner":true}]`
+			}
+
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprint(w, `[{"imei":"354820091234567","name":null,"fleet_id":3,"last_seen_at":null}]`)
 			})
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
+				fmt.Fprint(w, fleets)
 			})
 			mux.HandleFunc("DELETE /devices/{imei}", func(w http.ResponseWriter, r *http.Request) {
 				releasedPath = r.URL.Path

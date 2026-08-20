@@ -15,6 +15,7 @@ func TestMemberList(t *testing.T) {
 		wantFleet string
 		wantShown []string
 		wantExact string
+		refusal   string
 		wantError string
 	}{
 		{
@@ -46,6 +47,13 @@ func TestMemberList(t *testing.T) {
 			wantExact: `{"owner":"owner@example.com","members":[]}` + "\n",
 		},
 		{
+			name:      "server refusal",
+			arguments: []string{"3"},
+			wantFleet: "3",
+			refusal:   "only members can see this fleet",
+			wantError: "only members can see this fleet",
+		},
+		{
 			name:      "no fleet id",
 			arguments: []string{"--json"},
 			wantError: "takes a fleet id",
@@ -70,6 +78,11 @@ func TestMemberList(t *testing.T) {
 
 			mux.HandleFunc("GET /fleets/{id}/members", func(w http.ResponseWriter, r *http.Request) {
 				askedFleet = r.PathValue("id")
+
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusForbidden)
+					return
+				}
 
 				fmt.Fprint(w, test.people)
 			})

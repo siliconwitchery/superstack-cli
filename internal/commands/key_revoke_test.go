@@ -47,7 +47,7 @@ func TestKeyRevoke(t *testing.T) {
 			answer:      "y\n",
 			refusal:     "no such key",
 			wantRevoked: "/keys/3",
-			wantError:   "the server said: no such key",
+			wantError:   "no such key",
 		},
 		{
 			name:      "a key that is not yours",

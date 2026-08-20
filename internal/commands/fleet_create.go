@@ -9,7 +9,6 @@ import (
 )
 
 func FleetCreate(session Session, arguments []string) error {
-
 	if len(arguments) != 1 || arguments[0] == "" {
 		return errors.New("fleet create takes one name, quoted if it has spaces")
 	}
@@ -31,7 +30,7 @@ func FleetCreate(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

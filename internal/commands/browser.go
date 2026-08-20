@@ -6,14 +6,18 @@ import (
 )
 
 func openBrowser(url string) {
+	var command *exec.Cmd
+
 	switch runtime.GOOS {
 	case "darwin":
-		exec.Command("open", url).Start()
+		command = exec.Command("open", url)
 
 	case "windows":
-		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 
 	default:
-		exec.Command("xdg-open", url).Start()
+		command = exec.Command("xdg-open", url)
 	}
+
+	_ = command.Start()
 }

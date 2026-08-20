@@ -10,7 +10,6 @@ import (
 )
 
 func KeyCreate(session Session, arguments []string) error {
-
 	if len(arguments) != 2 || arguments[1] == "" {
 		return errors.New("key create takes a fleet id and a label, quoted if it has spaces")
 	}
@@ -39,7 +38,7 @@ func KeyCreate(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()
@@ -59,7 +58,7 @@ func KeyCreate(session Session, arguments []string) error {
 		return err
 	}
 
-	fmt.Fprintf(session.Out, "Created key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and it is shown only this once.\n", created.Id, created.Key)
+	fmt.Fprintf(session.Out, "Created key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, created.Key)
 
 	return nil
 }

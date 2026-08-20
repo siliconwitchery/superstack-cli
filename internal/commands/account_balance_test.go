@@ -62,6 +62,13 @@ func TestAccountBalance(t *testing.T) {
 			wantLines: []string{"No fleets yet"},
 		},
 		{
+			name:      "a fleet without credit",
+			arguments: []string{"1"},
+			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
+			balances:  `[]`,
+			wantExact: "No credit on that fleet yet.\n",
+		},
+		{
 			name:      "an unknown fleet",
 			arguments: []string{"9"},
 			fleets:    `[{"id":1,"name":"crew","owner":true}]`,

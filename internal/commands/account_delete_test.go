@@ -106,8 +106,6 @@ func TestAccountDelete(t *testing.T) {
 				t.Errorf("the output %q does not show %q", printed, test.wantShown)
 			}
 
-			// The stored login is worthless once the account is gone, and must
-			// survive anything short of a completed delete
 			_, statErr := os.Stat(path)
 
 			switch {

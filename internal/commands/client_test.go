@@ -46,8 +46,6 @@ func loggedInSession(t *testing.T, handler http.Handler) (Session, *bytes.Buffer
 		t.Fatal(err)
 	}
 
-	// Every command reaching a logged-in server must carry the stored key, so
-	// the fixture proves it once rather than each command remembering to
 	authorized := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer ssk_test" {
 			t.Errorf("%s %s carried authorization %q, want the stored key",
@@ -71,50 +69,48 @@ func loggedInSession(t *testing.T, handler http.Handler) (Session, *bytes.Buffer
 func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {
 	temporary := isolateKeyStorage(t)
 
-	path, err := keyPath()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.HasPrefix(path, temporary) {
-		t.Fatalf("keyPath() = %q, want it under the isolated home", path)
-	}
-
 	if runtime.GOOS != "linux" {
+		path, err := keyPath()
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.HasPrefix(path, temporary) {
+			t.Fatalf("keyPath() = %q, want it under the isolated home", path)
+		}
+
 		return
 	}
 
-	if path != filepath.Join(temporary, "superstack", "key") {
-		t.Errorf("keyPath() = %q, want it directly under XDG_STATE_HOME", path)
+	tests := []struct {
+		name      string
+		stateHome string
+		wantPath  string
+	}{
+		{name: "absolute state home", stateHome: temporary, wantPath: filepath.Join(temporary, "superstack", "key")},
+		{name: "empty state home", stateHome: "", wantPath: filepath.Join(temporary, ".local", "state", "superstack", "key")},
+		{name: "relative state home", stateHome: ".state", wantPath: filepath.Join(temporary, ".local", "state", "superstack", "key")},
 	}
 
-	t.Setenv("XDG_STATE_HOME", "")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", test.stateHome)
 
-	path, err = keyPath()
+			path, err := keyPath()
 
-	if err != nil {
-		t.Fatal(err)
-	}
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if path != filepath.Join(temporary, ".local", "state", "superstack", "key") {
-		t.Errorf("keyPath() = %q, want the ~/.local/state fallback", path)
-	}
+			if path != test.wantPath {
+				t.Errorf("keyPath() = %q, want %q", path, test.wantPath)
+			}
 
-	if strings.Contains(path, ".config") {
-		t.Errorf("keyPath() = %q, must never sit in ~/.config: dotfile repos publish it", path)
-	}
-
-	t.Setenv("XDG_STATE_HOME", ".state")
-
-	path, err = keyPath()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if path != filepath.Join(temporary, ".local", "state", "superstack", "key") {
-		t.Errorf("keyPath() = %q: a relative XDG_STATE_HOME must be ignored, never joined to the working directory", path)
+			if strings.Contains(path, ".config") {
+				t.Errorf("keyPath() = %q, must never sit in ~/.config", path)
+			}
+		})
 	}
 }
 
@@ -158,17 +154,17 @@ func TestTakeServerFlag(t *testing.T) {
 		{
 			name:      "a missing value",
 			arguments: []string{"login", "--server"},
-			wantError: "needs a url",
+			wantError: "needs an address",
 		},
 		{
 			name:      "an empty value",
 			arguments: []string{"login", "--server="},
-			wantError: "needs a url",
+			wantError: "needs an address",
 		},
 		{
 			name:      "an empty value from an unset shell variable",
 			arguments: []string{"--server", "", "login"},
-			wantError: "needs a url",
+			wantError: "needs an address",
 		},
 	}
 
@@ -242,8 +238,7 @@ func TestApiRequestBase(t *testing.T) {
 				t.Errorf("url = %q, want %q", request.URL.String(), test.wantUrl)
 			}
 
-			// Pinned to a literal, not to CliVersion: the server's gate parses
-			// this exact shape, so deriving it here would agree with any value
+			// The server's version gate parses this exact User-Agent shape.
 			if request.Header.Get("User-Agent") != "superstack/1.2.3" {
 				t.Errorf("User-Agent = %q, want superstack/1.2.3", request.Header.Get("User-Agent"))
 			}
@@ -253,30 +248,32 @@ func TestApiRequestBase(t *testing.T) {
 
 func TestCheckServer(t *testing.T) {
 	reachable := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-
-	defer reachable.Close()
-
-	session := NewSession(reachable.URL, "test", strings.NewReader(""), &bytes.Buffer{})
-
-	err := CheckServer(session)
-
-	if err != nil {
-		t.Fatalf("a reachable server reported: %v", err)
-	}
+	t.Cleanup(reachable.Close)
 
 	unreachable := httptest.NewServer(http.NotFoundHandler())
-
 	unreachable.Close()
-
-	session.Base = unreachable.URL
-
-	err = CheckServer(session)
-
-	if err == nil || !strings.Contains(err.Error(), "cannot be reached") {
-		t.Fatalf("error = %v, want the consistent cannot-be-reached message", err)
+	tests := []struct {
+		name      string
+		base      string
+		wantError string
+	}{
+		{name: "reachable", base: reachable.URL},
+		{name: "unreachable", base: unreachable.URL, wantError: "the server could not be reached, check your connection"},
 	}
 
-	if !strings.Contains(err.Error(), unreachable.URL) {
-		t.Errorf("error = %v, want it to name the server address", err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			session := NewSession(test.base, "test", strings.NewReader(""), &bytes.Buffer{})
+
+			err := CheckServer(session)
+
+			if test.wantError != "" {
+				if err == nil || err.Error() != test.wantError {
+					t.Fatalf("error = %v, want %q", err, test.wantError)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

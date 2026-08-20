@@ -24,33 +24,33 @@ var sections = []commands.Section{
 			{Name: "fleet list", Arguments: "[--json]", Summary: "List the fleets you can reach", Run: commands.FleetList},
 			{Name: "fleet rename", Arguments: "<fleet_id> <new_name>", Summary: "Rename a fleet", Run: commands.FleetRename},
 			{Name: "fleet transfer", Arguments: "<fleet_id> <email>", Summary: "Hand a fleet to a new owner", Run: commands.FleetTransfer},
-			{Name: "fleet delete", Arguments: "<fleet_id>", Summary: "Delete a fleet and factory reset its devices", Run: commands.FleetDelete},
+			{Name: "fleet delete", Arguments: "<fleet_id>", Summary: "Delete a fleet and release its devices", Run: commands.FleetDelete},
 		},
 	},
 	{
 		Title: "Devices",
 		Commands: []commands.Command{
-			{Name: "device claim", Arguments: "<imei> <fleet_id> [name]", Summary: "Claim a device into a fleet, then press its button", Run: commands.DeviceClaim},
+			{Name: "device claim", Arguments: "<imei> <fleet_id> [name]", Summary: "Claim a device into a fleet, then press its pairing button", Run: commands.DeviceClaim},
 			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices, their state, and when they were last seen", Run: commands.DeviceList},
 			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: commands.DeviceRename},
-			{Name: "device release", Arguments: "<imei>", Summary: "Unpair a device from its fleet and factory reset it", Run: commands.DeviceRelease},
-			{Name: "device start", Arguments: "<imei>", Summary: "Run the code on the target"},
-			{Name: "device stop", Arguments: "<imei>", Summary: "Halt the code on the target"},
-			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on the target"},
+			{Name: "device release", Arguments: "<imei>", Summary: "Release a device from its fleet and erase everything on it", Run: commands.DeviceRelease},
+			{Name: "device start", Arguments: "<imei>", Summary: "Start the code on a device"},
+			{Name: "device stop", Arguments: "<imei>", Summary: "Stop the code on a device"},
+			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on a device"},
 		},
 	},
 	{
 		Title: "Files",
 		Commands: []commands.Command{
-			{Name: "upload", Arguments: "<imei|fleet_id> <file> ...", Summary: "Upload files or directories to the target"},
-			{Name: "download", Arguments: "<imei|fleet_id> <path>", Summary: "Download the target's files into <path>"},
+			{Name: "upload", Arguments: "<imei|fleet_id> <file> ...", Summary: "Upload files or directories to a device or fleet"},
+			{Name: "download", Arguments: "<imei|fleet_id> <path>", Summary: "Download a device or fleet's files into <path>"},
 			{Name: "dev", Arguments: "<imei|fleet_id> <file> ... [--log-file <file>]", Summary: "Upload on every change, and tail"},
 		},
 	},
 	{
 		Title: "Logs",
 		Commands: []commands.Command{
-			{Name: "tail", Arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", Summary: "Stream the target's log as it arrives"},
+			{Name: "tail", Arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", Summary: "Stream a device or fleet's log as it arrives"},
 		},
 	},
 	{

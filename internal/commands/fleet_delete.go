@@ -10,7 +10,6 @@ import (
 )
 
 func FleetDelete(session Session, arguments []string) error {
-
 	if len(arguments) != 1 {
 		return errors.New("fleet delete takes a fleet id")
 	}
@@ -48,22 +47,30 @@ func FleetDelete(session Session, arguments []string) error {
 	}
 
 	forfeited := ""
+	forfeitUnknown := false
 
 	for _, balance := range balances {
 		if balance.Fleet != fleetId {
 			continue
 		}
 
-		value, err := strconv.ParseFloat(balance.Balance, 64)
+		formatted, value, parsed := formatBalance(balance)
 
-		if err == nil && value > 0 {
-			forfeited = formatBalance(balance)
+		if !parsed {
+			forfeitUnknown = true
+			continue
+		}
+
+		if value > 0 {
+			forfeited = formatted
 		}
 	}
 
-	consequence := "It erases them all, and claiming one again means pressing its button in person."
+	consequence := "It erases them all, and claiming one again means pressing its pairing button in person."
 
-	if forfeited == "" {
+	if forfeitUnknown {
+		fmt.Fprintf(session.Out, "Delete %q, release its devices, and forfeit its remaining credit? %s [y/N] ", name, consequence)
+	} else if forfeited == "" {
 		fmt.Fprintf(session.Out, "Delete %q and release its devices? %s [y/N] ", name, consequence)
 	} else {
 		fmt.Fprintf(session.Out, "Delete %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
@@ -88,7 +95,7 @@ func FleetDelete(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

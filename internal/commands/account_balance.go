@@ -8,7 +8,6 @@ import (
 )
 
 func AccountBalance(session Session, arguments []string) error {
-
 	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
@@ -64,7 +63,12 @@ func AccountBalance(session Session, arguments []string) error {
 	}
 
 	if len(balances) == 0 {
-		fmt.Fprintln(session.Out, "No fleets yet. Create one with fleet create.")
+		if chosenFleetId == 0 {
+			fmt.Fprintln(session.Out, "No fleets yet. Create one with fleet create.")
+		} else {
+			fmt.Fprintln(session.Out, "No credit on that fleet yet.")
+		}
+
 		return nil
 	}
 
@@ -79,7 +83,9 @@ func AccountBalance(session Session, arguments []string) error {
 	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
 
 	for _, balance := range balances {
-		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, fleetNames[balance.Fleet], formatBalance(balance))
+		formatted, _, _ := formatBalance(balance)
+
+		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, fleetNames[balance.Fleet], formatted)
 	}
 
 	return nil

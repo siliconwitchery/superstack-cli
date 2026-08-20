@@ -19,14 +19,14 @@ func TestDeviceClaim(t *testing.T) {
 		{
 			name:       "button pressed",
 			statusCode: http.StatusNoContent,
-			wantOutput: "Press the button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n",
+			wantOutput: "Press the pairing button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n",
 		},
 		{
 			name:       "button not pressed",
 			statusCode: http.StatusRequestTimeout,
 			message:    "the button was not pressed in time",
-			wantOutput: "Press the button on the device to finish claiming it.\n",
-			wantError:  "the server said: the button was not pressed in time",
+			wantOutput: "Press the pairing button on the device to finish claiming it.\n",
+			wantError:  "the button was not pressed in time",
 		},
 	}
 
@@ -113,7 +113,7 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 		t.Error("the request included a name although none was given")
 	}
 
-	if out.String() != "Press the button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n" {
+	if out.String() != "Press the pairing button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n" {
 		t.Errorf("output = %q", out.String())
 	}
 }
@@ -141,7 +141,7 @@ func TestDeviceClaimArguments(t *testing.T) {
 	}
 }
 
-func TestDeviceClaimUnknownFleetUsesFleetIdGuidance(t *testing.T) {
+func TestDeviceClaimUnknownFleet(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[]`)
@@ -151,7 +151,7 @@ func TestDeviceClaimUnknownFleetUsesFleetIdGuidance(t *testing.T) {
 
 	err := DeviceClaim(session, []string{"354820091234567", "9"})
 
-	if err == nil || !strings.Contains(err.Error(), "shown by fleet list") {
+	if err == nil || err.Error() != "no such fleet" {
 		t.Fatalf("error = %v", err)
 	}
 }

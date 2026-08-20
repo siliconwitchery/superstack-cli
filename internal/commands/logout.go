@@ -10,7 +10,6 @@ import (
 )
 
 func Logout(session Session, arguments []string) error {
-
 	if len(arguments) != 0 {
 		return errors.New("logout takes no arguments")
 	}
@@ -32,8 +31,7 @@ func Logout(session Session, arguments []string) error {
 		return err
 	}
 
-	// Revoke on the server first, keeping the key on any failure so another
-	// logout can retry; a forgotten key can never be revoked
+	// Revoke on the server before removing the stored key
 	revokeRequest, err := apiRequest(session, http.MethodPost, "/logout", nil)
 
 	if err != nil {
@@ -45,13 +43,13 @@ func Logout(session Session, arguments []string) error {
 	revokeResponse, err := session.Client.Do(revokeRequest)
 
 	if err != nil {
-		return fmt.Errorf("you are still logged in: the server could not be reached: %w", err)
+		return errors.New("you are still logged in, the server could not be reached")
 	}
 
 	defer revokeResponse.Body.Close()
 
 	if revokeResponse.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("you are still logged in: %w", serverError(revokeResponse))
+		return fmt.Errorf("you are still logged in: %s", serverError(revokeResponse))
 	}
 
 	err = os.Remove(path)

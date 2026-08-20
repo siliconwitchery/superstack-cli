@@ -8,39 +8,60 @@ import (
 )
 
 func TestMemberAdd(t *testing.T) {
-	addedPath := ""
-	addedEmail := ""
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("POST /fleets/{id}/members", func(w http.ResponseWriter, r *http.Request) {
-		body := struct {
-			Email string `json:"email"`
-		}{}
-
-		json.NewDecoder(r.Body).Decode(&body)
-
-		addedPath = r.URL.Path
-		addedEmail = body.Email
-
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	session, out := loggedInSession(t, mux)
-
-	err := MemberAdd(session, []string{"member@example.com", "3"})
-
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name       string
+		refusal    string
+		wantOutput string
+		wantError  string
+	}{
+		{name: "added", wantOutput: "Gave member@example.com access.\n"},
+		{name: "server refusal", refusal: "no such account", wantError: "no such account"},
 	}
 
-	if addedPath != "/fleets/3/members" || addedEmail != "member@example.com" {
-		t.Errorf("the server saw %q added at %q, want %q at %q",
-			addedEmail, addedPath, "member@example.com", "/fleets/3/members")
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			addedPath := ""
+			addedEmail := ""
+			mux := http.NewServeMux()
 
-	if out.String() != "Gave member@example.com access.\n" {
-		t.Errorf("output = %q", out.String())
+			mux.HandleFunc("POST /fleets/{id}/members", func(w http.ResponseWriter, r *http.Request) {
+				body := struct {
+					Email string `json:"email"`
+				}{}
+
+				json.NewDecoder(r.Body).Decode(&body)
+				addedPath = r.URL.Path
+				addedEmail = body.Email
+
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusNotFound)
+					return
+				}
+
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			session, out := loggedInSession(t, mux)
+
+			err := MemberAdd(session, []string{"member@example.com", "3"})
+
+			if test.wantError != "" {
+				if err == nil || err.Error() != test.wantError {
+					t.Fatalf("error = %v, want %q", err, test.wantError)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+
+			if addedPath != "/fleets/3/members" || addedEmail != "member@example.com" {
+				t.Errorf("the server saw %q added at %q, want %q at %q",
+					addedEmail, addedPath, "member@example.com", "/fleets/3/members")
+			}
+
+			if out.String() != test.wantOutput {
+				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
+			}
+		})
 	}
 }
 

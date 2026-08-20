@@ -23,21 +23,48 @@ func TestDeviceList(t *testing.T) {
 		wantHidden []string
 		wantExact  string
 		wantError  string
+		devices    string
+		fleets     string
+		refusal    string
 	}{
-		{"table", nil, []string{"IMEI             NAME  FLEET     STATE    STORAGE            LAST SEEN", "roof", "pilot", "running", "1.2 kB of 57.3 kB", "just now", "-", "workshop", "crashed", "2.5 MB of 8.0 MB", "3 h ago", "unknown", "never"}, nil, "", ""},
-		{"filtered", []string{"3"}, []string{"111111111111111", "333333333333333"}, []string{"222222222222222", "workshop"}, "", ""},
-		{"json flag anywhere", []string{"3", "--json"}, []string{`"imei":"111111111111111"`, `"fleet_id":3`}, []string{"LAST SEEN", "222222222222222"}, "", ""},
-		{"empty fleet", []string{"5"}, nil, nil, "No devices in that fleet.\n", ""},
-		{"unknown fleet", []string{"9"}, nil, nil, "", "no such fleet"},
-		{"two ids", []string{"3", "4"}, nil, nil, "", "takes at most one fleet id"},
-		{"wordy id", []string{"pilot"}, nil, nil, "", "shown by fleet list"},
+		{name: "table", wantShown: []string{"IMEI             NAME  FLEET     STATE    STORAGE            LAST SEEN", "roof", "pilot", "running", "1.2 kB of 57.3 kB", "just now", "-", "workshop", "crashed", "2.5 MB of 8.0 MB", "3 h ago", "unknown", "never"}},
+		{name: "filtered", arguments: []string{"3"}, wantShown: []string{"111111111111111", "333333333333333"}, wantHidden: []string{"222222222222222", "workshop"}},
+		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`}, wantHidden: []string{"LAST SEEN", "222222222222222"}},
+		{name: "empty fleet", arguments: []string{"5"}, wantExact: "No devices in that fleet.\n"},
+		{name: "no devices", devices: `[]`, fleets: `[]`, wantExact: "No devices yet. Claim one with device claim.\n"},
+		{name: "server refusal", refusal: "devices unavailable", wantError: "devices unavailable"},
+		{name: "unknown fleet", arguments: []string{"9"}, wantError: "no such fleet"},
+		{name: "two ids", arguments: []string{"3", "4"}, wantError: "takes at most one fleet id"},
+		{name: "wordy id", arguments: []string{"pilot"}, wantError: "shown by fleet list"},
+		{name: "bad last seen time", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday"}]`, wantError: `cannot parse "yesterday"`},
+		{name: "minutes ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-12*time.Minute).Format(time.RFC3339)), wantShown: []string{"12 min ago"}},
+		{name: "days ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-49*time.Hour).Format(time.RFC3339)), wantShown: []string{"2 d ago"}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			servedDevices := test.devices
+
+			if servedDevices == "" {
+				servedDevices = devices
+			}
+
+			servedFleets := test.fleets
+
+			if servedFleets == "" {
+				servedFleets = fleets
+			}
+
 			mux := http.NewServeMux()
-			mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, devices) })
-			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, fleets) })
+			mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusServiceUnavailable)
+					return
+				}
+
+				fmt.Fprint(w, servedDevices)
+			})
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, servedFleets) })
 			session, out := loggedInSession(t, mux)
 
 			err := DeviceList(session, test.arguments)
@@ -125,36 +152,5 @@ func TestFormatStorage(t *testing.T) {
 				t.Errorf("formatStorage() = %q, want %q", got, test.want)
 			}
 		})
-	}
-}
-
-func TestDeviceListEmptyAndServerError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `[]`) })
-	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `[]`) })
-	session, out := loggedInSession(t, mux)
-
-	err := DeviceList(session, nil)
-
-	printed := out.String()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if printed != "No devices yet. Claim one with device claim.\n" {
-		t.Errorf("output = %q", printed)
-	}
-
-	errorMux := http.NewServeMux()
-	errorMux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "devices unavailable", http.StatusServiceUnavailable)
-	})
-	errorSession, _ := loggedInSession(t, errorMux)
-
-	err = DeviceList(errorSession, nil)
-
-	if err == nil || err.Error() != "the server said: devices unavailable" {
-		t.Fatalf("error = %v", err)
 	}
 }

@@ -134,7 +134,7 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 		topic, _, topicFound := resolve(sections, rest)
 
 		if !topicFound {
-			return fmt.Errorf("unknown command %q", strings.Join(rest, " "))
+			return fmt.Errorf("unknown command %q\nRun 'superstack help' for the list.", strings.Join(rest, " "))
 		}
 
 		signature := topic.Name
@@ -148,7 +148,7 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 	}
 
 	if entry.Run == nil {
-		return fmt.Errorf("%s is not implemented yet", entry.Name)
+		return fmt.Errorf("%s is not available yet", entry.Name)
 	}
 
 	err = CheckServer(session)

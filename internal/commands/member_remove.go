@@ -11,7 +11,6 @@ import (
 )
 
 func MemberRemove(session Session, arguments []string) error {
-
 	if len(arguments) != 2 || arguments[0] == "" {
 		return errors.New("member remove takes an email address and a fleet id")
 	}
@@ -51,7 +50,7 @@ func MemberRemove(session Session, arguments []string) error {
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Fprintln(session.Out, "Nothing changed.")
+		fmt.Fprintln(session.Out, "Nothing removed.")
 		return nil
 	}
 
@@ -65,7 +64,7 @@ func MemberRemove(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

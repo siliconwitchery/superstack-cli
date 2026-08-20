@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -23,7 +24,7 @@ func fetchBalances(session Session) ([]balanceEntry, error) {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return nil, fmt.Errorf("the server could not be reached: %w", err)
+		return nil, errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()
@@ -43,12 +44,12 @@ func fetchBalances(session Session) ([]balanceEntry, error) {
 	return balances, nil
 }
 
-func formatBalance(entry balanceEntry) string {
+func formatBalance(entry balanceEntry) (string, float64, bool) {
 	value, err := strconv.ParseFloat(entry.Balance, 64)
 
 	if err != nil {
-		return entry.Balance
+		return entry.Balance, 0, false
 	}
 
-	return fmt.Sprintf("€%.2f", value)
+	return fmt.Sprintf("€%.2f", value), value, true
 }

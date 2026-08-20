@@ -53,7 +53,7 @@ func TestKeyCreate(t *testing.T) {
 			arguments: []string{"9", "doomed"},
 			wantPath:  "/fleets/9/keys",
 			refusal:   "no such fleet",
-			wantError: "the server said: no such fleet",
+			wantError: "no such fleet",
 		},
 	}
 
@@ -108,6 +108,10 @@ func TestKeyCreate(t *testing.T) {
 
 			if !strings.Contains(printed, "ssf_testtesttestab2de") {
 				t.Errorf("the output %q does not show the key", printed)
+			}
+
+			if !strings.Contains(printed, "you will not see it again") {
+				t.Errorf("the output %q does not warn that the key cannot be shown again", printed)
 			}
 		})
 	}

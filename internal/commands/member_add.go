@@ -10,7 +10,6 @@ import (
 )
 
 func MemberAdd(session Session, arguments []string) error {
-
 	if len(arguments) != 2 || arguments[0] == "" {
 		return errors.New("member add takes an email address and a fleet id")
 	}
@@ -41,7 +40,7 @@ func MemberAdd(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

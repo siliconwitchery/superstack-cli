@@ -2,7 +2,7 @@ package commands
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 )
 
@@ -23,7 +23,7 @@ func fetchKeys(session Session) ([]keyEntry, error) {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return nil, fmt.Errorf("the server could not be reached: %w", err)
+		return nil, errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

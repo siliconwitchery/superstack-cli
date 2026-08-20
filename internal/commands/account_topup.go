@@ -10,7 +10,6 @@ import (
 )
 
 func AccountTopup(session Session, arguments []string) error {
-
 	if len(arguments) != 1 {
 		return errors.New("account topup takes a fleet id")
 	}
@@ -31,7 +30,7 @@ func AccountTopup(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()
@@ -47,10 +46,10 @@ func AccountTopup(session Session, arguments []string) error {
 	err = json.NewDecoder(response.Body).Decode(&opened)
 
 	if err != nil || opened.Url == "" {
-		return errors.New("the payment page could not be opened, try again")
+		return errors.New("could not open the top-up page, try again")
 	}
 
-	fmt.Fprintf(session.Out, "Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the payment completes.\nPress enter to open the browser.\n", opened.Url)
+	fmt.Fprintf(session.Out, "Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the top-up completes.\nPress enter to open the browser.\n", opened.Url)
 
 	_, err = bufio.NewReader(session.In).ReadString('\n')
 

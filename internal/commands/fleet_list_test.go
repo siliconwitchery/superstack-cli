@@ -37,7 +37,7 @@ func TestFleetList(t *testing.T) {
 		{
 			name:      "an unknown argument",
 			arguments: []string{"--verbose"},
-			wantError: "only --json",
+			wantError: "fleet list takes no arguments",
 		},
 	}
 

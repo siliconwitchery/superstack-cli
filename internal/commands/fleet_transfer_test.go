@@ -8,39 +8,60 @@ import (
 )
 
 func TestFleetTransfer(t *testing.T) {
-	transferredPath := ""
-	transferredTo := ""
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("POST /fleets/{id}/owner", func(w http.ResponseWriter, r *http.Request) {
-		body := struct {
-			Email string `json:"email"`
-		}{}
-
-		json.NewDecoder(r.Body).Decode(&body)
-
-		transferredPath = r.URL.Path
-		transferredTo = body.Email
-
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	session, out := loggedInSession(t, mux)
-
-	err := FleetTransfer(session, []string{"3", "successor@example.com"})
-
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name       string
+		refusal    string
+		wantOutput string
+		wantError  string
+	}{
+		{name: "transferred", wantOutput: "Transferred the fleet to successor@example.com.\n"},
+		{name: "server refusal", refusal: "the new owner has no account", wantError: "the new owner has no account"},
 	}
 
-	if transferredPath != "/fleets/3/owner" || transferredTo != "successor@example.com" {
-		t.Errorf("the server saw %q handed to %q, want %q handed to %q",
-			transferredPath, transferredTo, "/fleets/3/owner", "successor@example.com")
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transferredPath := ""
+			transferredTo := ""
+			mux := http.NewServeMux()
 
-	if out.String() != "Transferred the fleet to successor@example.com.\n" {
-		t.Errorf("output = %q", out.String())
+			mux.HandleFunc("POST /fleets/{id}/owner", func(w http.ResponseWriter, r *http.Request) {
+				body := struct {
+					Email string `json:"email"`
+				}{}
+
+				json.NewDecoder(r.Body).Decode(&body)
+				transferredPath = r.URL.Path
+				transferredTo = body.Email
+
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusNotFound)
+					return
+				}
+
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			session, out := loggedInSession(t, mux)
+
+			err := FleetTransfer(session, []string{"3", "successor@example.com"})
+
+			if test.wantError != "" {
+				if err == nil || err.Error() != test.wantError {
+					t.Fatalf("error = %v, want %q", err, test.wantError)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+
+			if transferredPath != "/fleets/3/owner" || transferredTo != "successor@example.com" {
+				t.Errorf("the server saw %q handed to %q, want %q handed to %q",
+					transferredPath, transferredTo, "/fleets/3/owner", "successor@example.com")
+			}
+
+			if out.String() != test.wantOutput {
+				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
+			}
+		})
 	}
 }
 

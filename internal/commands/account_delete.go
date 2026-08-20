@@ -11,7 +11,6 @@ import (
 )
 
 func AccountDelete(session Session, arguments []string) error {
-
 	if len(arguments) != 0 {
 		return errors.New("account delete takes no arguments")
 	}
@@ -36,7 +35,7 @@ func AccountDelete(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()
@@ -45,8 +44,7 @@ func AccountDelete(session Session, arguments []string) error {
 		return serverError(response)
 	}
 
-	// The stored login died with the account, so it goes whether or not the
-	// file is still there
+	// Remove the stored login
 	path, err := keyPath()
 
 	if err != nil {

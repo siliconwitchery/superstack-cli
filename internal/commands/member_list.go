@@ -9,7 +9,6 @@ import (
 )
 
 func MemberList(session Session, arguments []string) error {
-
 	positionals, jsonOutput := takeJsonFlag(arguments)
 
 	if len(positionals) != 1 {
@@ -32,7 +31,7 @@ func MemberList(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

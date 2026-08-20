@@ -10,7 +10,6 @@ import (
 )
 
 func KeyRevoke(session Session, arguments []string) error {
-
 	if len(arguments) != 1 {
 		return errors.New("key revoke takes a key id")
 	}
@@ -62,7 +61,7 @@ func KeyRevoke(session Session, arguments []string) error {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return fmt.Errorf("the server could not be reached: %w", err)
+		return errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -26,7 +27,7 @@ func fetchDevices(session Session) ([]deviceEntry, error) {
 	response, err := session.Client.Do(request)
 
 	if err != nil {
-		return nil, fmt.Errorf("the server could not be reached: %w", err)
+		return nil, errors.New("the server could not be reached, check your connection")
 	}
 
 	defer response.Body.Close()
