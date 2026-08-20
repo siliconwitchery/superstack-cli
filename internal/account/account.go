@@ -12,11 +12,10 @@ import (
 	"strings"
 
 	"github.com/siliconwitchery/superstack-cli/internal/api"
-	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
 )
 
 func Balance(session api.Session, arguments []string) error {
-	positionals, jsonOutput := dispatch.TakeJsonFlag(arguments)
+	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
 		return errors.New("account balance takes at most one fleet id")

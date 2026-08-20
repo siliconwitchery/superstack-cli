@@ -9,7 +9,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func TakeServerFlag(arguments []string) ([]string, string, error) {
+func takeServerFlag(arguments []string) ([]string, string, error) {
 	remaining := []string{}
 
 	base := api.DefaultBase
@@ -17,7 +17,7 @@ func TakeServerFlag(arguments []string) ([]string, string, error) {
 	for index := 0; index < len(arguments); index++ {
 		switch {
 		case arguments[index] == "--server":
-			if index+1 == len(arguments) || arguments[index+1] == "" {
+			if index+1 == len(arguments) {
 				return nil, "", errors.New("--server needs an address")
 			}
 
@@ -28,32 +28,18 @@ func TakeServerFlag(arguments []string) ([]string, string, error) {
 		case strings.HasPrefix(arguments[index], "--server="):
 			base = strings.TrimPrefix(arguments[index], "--server=")
 
-			if base == "" {
-				return nil, "", errors.New("--server needs an address")
-			}
-
 		default:
 			remaining = append(remaining, arguments[index])
 		}
 	}
 
-	return remaining, strings.TrimSuffix(base, "/"), nil
-}
+	base = strings.TrimRight(base, "/")
 
-func TakeJsonFlag(arguments []string) ([]string, bool) {
-	positionals := []string{}
-	jsonOutput := false
-
-	for _, argument := range arguments {
-		if argument == "--json" {
-			jsonOutput = true
-			continue
-		}
-
-		positionals = append(positionals, argument)
+	if base == "" {
+		return nil, "", errors.New("--server needs an address")
 	}
 
-	return positionals, jsonOutput
+	return remaining, base, nil
 }
 
 type Command struct {
@@ -141,7 +127,7 @@ func printHelp(session api.Session, sections []Section) {
 }
 
 func Dispatch(sections []Section, version string, arguments []string, in io.Reader, out io.Writer) error {
-	arguments, base, err := TakeServerFlag(arguments)
+	arguments, base, err := takeServerFlag(arguments)
 
 	if err != nil {
 		return err

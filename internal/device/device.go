@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/siliconwitchery/superstack-cli/internal/api"
-	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
 )
 
 func Claim(session api.Session, arguments []string) error {
@@ -24,7 +23,7 @@ func Claim(session api.Session, arguments []string) error {
 
 	imei := arguments[0]
 
-	if !api.ValidImei(imei) {
+	if !validImei(imei) {
 		return errors.New("the IMEI is the 15-digit number printed on the device")
 	}
 
@@ -93,7 +92,7 @@ func Claim(session api.Session, arguments []string) error {
 }
 
 func List(session api.Session, arguments []string) error {
-	positionals, jsonOutput := dispatch.TakeJsonFlag(arguments)
+	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
 		return errors.New("device list takes at most one fleet id")
@@ -262,7 +261,7 @@ func Rename(session api.Session, arguments []string) error {
 
 	imei := arguments[0]
 
-	if !api.ValidImei(imei) {
+	if !validImei(imei) {
 		return errors.New("the IMEI is the 15-digit number printed on the device")
 	}
 
@@ -310,7 +309,7 @@ func Release(session api.Session, arguments []string) error {
 
 	imei := arguments[0]
 
-	if !api.ValidImei(imei) {
+	if !validImei(imei) {
 		return errors.New("the IMEI is the 15-digit number printed on the device")
 	}
 
@@ -382,4 +381,18 @@ func Release(session api.Session, arguments []string) error {
 	fmt.Fprintln(session.Out, "Released the device.")
 
 	return nil
+}
+
+func validImei(imei string) bool {
+	if len(imei) != 15 {
+		return false
+	}
+
+	for _, digit := range imei {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+
+	return true
 }
