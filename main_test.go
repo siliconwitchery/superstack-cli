@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -267,5 +268,25 @@ func TestMainReportsFailureWithANonZeroExit(t *testing.T) {
 				t.Errorf("superstack %s said %q, want it to mention %q", test.arguments, output, test.wantSays)
 			}
 		})
+	}
+}
+
+func TestTheModuleStaysDependencyFree(t *testing.T) {
+	module, err := os.ReadFile("go.mod")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, line := range strings.Split(string(module), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "require") {
+			t.Errorf("go.mod says %q, so flake.nix cannot keep vendorHash = null", strings.TrimSpace(line))
+		}
+	}
+
+	_, err = os.Stat("go.sum")
+
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Error("go.sum exists, so something is vendored and flake.nix needs a real vendorHash")
 	}
 }
