@@ -101,6 +101,12 @@ func TestFleetList(t *testing.T) {
 			wantShown: []string{"ID", "NAME", "ROLE", "field trial", "owner", "rooftop", "member"},
 		},
 		{
+			name:       "a name with control characters is escaped",
+			fleets:     `[{"id":1,"name":"\u001b[2K\rhidden","owner":true}]`,
+			wantShown:  []string{`\x1b[2K\rhidden`},
+			wantAbsent: []string{"\x1b"},
+		},
+		{
 			name:       "no fleets",
 			fleets:     `[]`,
 			wantShown:  []string{"No fleets yet"},

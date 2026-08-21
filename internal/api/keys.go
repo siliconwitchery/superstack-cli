@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 )
@@ -34,7 +33,7 @@ func FetchKeys(session Session) ([]KeyEntry, error) {
 
 	keys := []KeyEntry{}
 
-	err = json.NewDecoder(response.Body).Decode(&keys)
+	err = Decode(response, &keys)
 
 	if err != nil {
 		return nil, err

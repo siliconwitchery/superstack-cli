@@ -39,6 +39,14 @@ func TestAccountBalance(t *testing.T) {
 			wantAbsent: []string{"crew"},
 		},
 		{
+			name:       "a fleet name with control characters is escaped",
+			arguments:  []string{},
+			fleets:     `[{"id":1,"name":"\u001b[2Kquiet","owner":true}]`,
+			balances:   `[{"fleet":1,"balance":"15.000000","currency":"eur"}]`,
+			wantLines:  []string{`\x1b[2Kquiet`},
+			wantAbsent: []string{"\x1b"},
+		},
+		{
 			name:      "machine readable",
 			arguments: []string{"--json"},
 			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
@@ -392,5 +400,27 @@ func TestAccountDeleteAsksNothingWhenTheServerIsGone(t *testing.T) {
 
 	if out.String() != "" {
 		t.Errorf("it asked %q before finding the server was gone", out.String())
+	}
+}
+
+func TestAccountDeleteStopsWhenTheStoredLoginIsNoLongerValid(t *testing.T) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+
+	session, out := apitest.LoggedInSession(t, mux)
+
+	session.In = strings.NewReader("y\n")
+
+	err := Delete(session, nil)
+
+	if err == nil || !strings.Contains(err.Error(), "not logged in") {
+		t.Fatalf("error = %v, want it to say the login is not valid", err)
+	}
+
+	if out.String() != "" {
+		t.Errorf("output = %q, want the question never to be put", out.String())
 	}
 }

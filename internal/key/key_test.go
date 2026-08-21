@@ -16,9 +16,18 @@ func TestKeyCreate(t *testing.T) {
 		arguments []string
 		wantPath  string
 		wantLabel string
+		answer    string
 		refusal   string
 		wantError string
 	}{
+		{
+			name:      "the server answers without a key",
+			arguments: []string{"3", "deploy server"},
+			wantPath:  "/fleets/3/keys",
+			wantLabel: "deploy server",
+			answer:    `{"id":1}`,
+			wantError: "was not created",
+		},
 		{
 			name:      "a labelled key",
 			arguments: []string{"3", "deploy server"},
@@ -87,7 +96,13 @@ func TestKeyCreate(t *testing.T) {
 					t.Errorf("the request carried label %q, want %q", sent.Label, test.wantLabel)
 				}
 
-				fmt.Fprint(w, `{"id":1,"key":"ssf_testtesttestab2de"}`)
+				answer := test.answer
+
+				if answer == "" {
+					answer = `{"id":1,"key":"ssf_testtesttestab2de"}`
+				}
+
+				fmt.Fprint(w, answer)
 			})
 
 			session, out := apitest.LoggedInSession(t, mux)
@@ -149,6 +164,13 @@ func TestKeyList(t *testing.T) {
 			arguments:  []string{"3"},
 			wantShown:  []string{"ID  FLEET  FLEET NAME", "crew", "...ab2de"},
 			wantHidden: []string{"skunkworks", "f9hjk", "lab sensor"},
+		},
+		{
+			name:       "a label with control characters is escaped",
+			arguments:  []string{},
+			keys:       `[{"id":1,"fleet":3,"label":"\u001b[2Kquiet","suffix":"ab2de"}]`,
+			wantShown:  []string{`\x1b[2Kquiet`},
+			wantHidden: []string{"\x1b"},
 		},
 		{
 			name:      "no keys",

@@ -56,13 +56,17 @@ func Create(session api.Session, arguments []string) error {
 		Key string `json:"key"`
 	}{}
 
-	err = json.NewDecoder(response.Body).Decode(&created)
+	err = api.Decode(response, &created)
 
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(session.Out, "Created fleet key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, created.Key)
+	if created.Key == "" {
+		return errors.New("the fleet key was not created, try again")
+	}
+
+	fmt.Fprintf(session.Out, "Created fleet key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, api.Printable(created.Key))
 
 	return nil
 }
@@ -135,19 +139,31 @@ func List(session api.Session, arguments []string) error {
 	idWidth := len("ID")
 	fleetIdWidth := len("FLEET")
 	fleetNameWidth := len("FLEET NAME")
+	fleetNameValues := make([]string, len(keys))
+	suffixValues := make([]string, len(keys))
+	labelValues := make([]string, len(keys))
 
-	for _, key := range keys {
+	for index, key := range keys {
+		fleetName, known := fleetNames[key.Fleet]
+
+		if !known {
+			fleetName = "-"
+		}
+
+		fleetNameValues[index] = api.Printable(fleetName)
+		suffixValues[index] = api.Printable(key.Suffix)
+		labelValues[index] = api.Printable(key.Label)
 		idWidth = max(idWidth, len(strconv.FormatInt(key.Id, 10)))
 		fleetIdWidth = max(fleetIdWidth, len(strconv.FormatInt(key.Fleet, 10)))
-		fleetNameWidth = max(fleetNameWidth, len(fleetNames[key.Fleet]))
+		fleetNameWidth = max(fleetNameWidth, len(fleetNameValues[index]))
 	}
 
 	fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-8s  %s\n",
 		idWidth, "ID", fleetIdWidth, "FLEET", fleetNameWidth, "FLEET NAME", "KEY", "LABEL")
 
-	for _, key := range keys {
+	for index, key := range keys {
 		fmt.Fprintf(session.Out, "%-*d  %-*d  %-*s  ...%s  %s\n",
-			idWidth, key.Id, fleetIdWidth, key.Fleet, fleetNameWidth, fleetNames[key.Fleet], key.Suffix, key.Label)
+			idWidth, key.Id, fleetIdWidth, key.Fleet, fleetNameWidth, fleetNameValues[index], suffixValues[index], labelValues[index])
 	}
 
 	return nil

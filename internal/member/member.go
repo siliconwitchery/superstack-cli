@@ -96,7 +96,7 @@ func List(session api.Session, arguments []string) error {
 		Members []string `json:"members"`
 	}{}
 
-	err = json.NewDecoder(response.Body).Decode(&people)
+	err = api.Decode(response, &people)
 
 	if err != nil {
 		return err
@@ -106,17 +106,20 @@ func List(session api.Session, arguments []string) error {
 		return json.NewEncoder(session.Out).Encode(people)
 	}
 
-	emailWidth := max(len("EMAIL"), len(people.Owner))
+	owner := api.Printable(people.Owner)
+	members := make([]string, len(people.Members))
+	emailWidth := max(len("EMAIL"), len(owner))
 
-	for _, email := range people.Members {
-		emailWidth = max(emailWidth, len(email))
+	for index, email := range people.Members {
+		members[index] = api.Printable(email)
+		emailWidth = max(emailWidth, len(members[index]))
 	}
 
 	fmt.Fprintf(session.Out, "%-*s  %s\n", emailWidth, "EMAIL", "ROLE")
 
-	fmt.Fprintf(session.Out, "%-*s  owner\n", emailWidth, people.Owner)
+	fmt.Fprintf(session.Out, "%-*s  owner\n", emailWidth, owner)
 
-	for _, email := range people.Members {
+	for _, email := range members {
 		fmt.Fprintf(session.Out, "%-*s  member\n", emailWidth, email)
 	}
 

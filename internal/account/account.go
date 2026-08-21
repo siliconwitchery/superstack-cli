@@ -81,18 +81,28 @@ func Balance(session api.Session, arguments []string) error {
 
 	idWidth := len("ID")
 	nameWidth := len("NAME")
+	nameValues := make([]string, len(balances))
+	amountValues := make([]string, len(balances))
 
-	for _, balance := range balances {
+	for index, balance := range balances {
+		name, known := fleetNames[balance.Fleet]
+
+		if !known {
+			name = "-"
+		}
+
+		formatted, _, _ := api.FormatBalance(balance)
+
+		nameValues[index] = api.Printable(name)
+		amountValues[index] = api.Printable(formatted)
 		idWidth = max(idWidth, len(strconv.FormatInt(balance.Fleet, 10)))
-		nameWidth = max(nameWidth, len(fleetNames[balance.Fleet]))
+		nameWidth = max(nameWidth, len(nameValues[index]))
 	}
 
 	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
 
-	for _, balance := range balances {
-		formatted, _, _ := api.FormatBalance(balance)
-
-		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, fleetNames[balance.Fleet], formatted)
+	for index, balance := range balances {
+		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, nameValues[index], amountValues[index])
 	}
 
 	return nil
@@ -132,13 +142,13 @@ func Topup(session api.Session, arguments []string) error {
 		Url string `json:"url"`
 	}{}
 
-	err = json.NewDecoder(response.Body).Decode(&opened)
+	err = api.Decode(response, &opened)
 
 	if err != nil || opened.Url == "" {
 		return errors.New("could not open the top-up page, try again")
 	}
 
-	fmt.Fprintf(session.Out, "Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the top-up completes.\nPress enter to open the browser.\n", opened.Url)
+	fmt.Fprintf(session.Out, "Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the top-up completes.\nPress enter to open the browser.\n", api.Printable(opened.Url))
 
 	_, err = bufio.NewReader(session.In).ReadString('\n')
 
@@ -170,6 +180,10 @@ func Delete(session api.Session, arguments []string) error {
 
 	response.Body.Close()
 
+	if response.StatusCode == http.StatusUnauthorized {
+		return errors.New("you are not logged in, run login first")
+	}
+
 	fmt.Fprint(session.Out, "Delete your account, its logins, and your access to every fleet? This cannot be undone. [y/N] ")
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
@@ -199,6 +213,8 @@ func Delete(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
+	fmt.Fprintln(session.Out, "Account deleted.")
+
 	path, err := api.KeyPath()
 
 	if err != nil {
@@ -208,10 +224,8 @@ func Delete(session api.Session, arguments []string) error {
 	err = os.Remove(path)
 
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+		return fmt.Errorf("the login stored at %s is no longer valid but could not be removed, delete it yourself", path)
 	}
-
-	fmt.Fprintln(session.Out, "Account deleted.")
 
 	return nil
 }
