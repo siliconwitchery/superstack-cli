@@ -18,7 +18,7 @@ func TestMemberAdd(t *testing.T) {
 		wantOutput string
 		wantError  string
 	}{
-		{name: "added", wantOutput: "Gave member@example.com access.\n"},
+		{name: "added", wantOutput: "Gave member@example.com access to fleet 3.\n"},
 		{name: "server refusal", refusal: "no such account", wantError: "no such account"},
 	}
 
@@ -217,7 +217,8 @@ func TestMemberRemove(t *testing.T) {
 	}{
 		{name: "a plain address", email: "member@example.com", answer: "y\n", wantRemoved: true},
 		{name: "an address with a hash", email: "a#b@example.com", answer: "yes\n", wantRemoved: true},
-		{name: "the prompt names the fleet", email: "member@example.com", answer: "y\n", wantRemoved: true, wantShown: `access to "pilot"`},
+		{name: "the question names the fleet", email: "member@example.com", answer: "n\n", wantShown: `Take away member@example.com's access to fleet "pilot"?`},
+		{name: "the success line names the fleet", email: "member@example.com", answer: "y\n", wantRemoved: true, wantShown: `Removed member@example.com's access to fleet "pilot".`},
 		{name: "declined by default", email: "member@example.com", answer: "\n", wantShown: "Nothing removed"},
 		{name: "declined with n", email: "member@example.com", answer: "n\n", wantShown: "Nothing removed"},
 		{name: "closed input", email: "member@example.com", wantShown: "Nothing removed"},

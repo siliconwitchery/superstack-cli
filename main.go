@@ -39,7 +39,7 @@ var sections = []dispatch.Section{
 			{Name: "device claim", Arguments: "<imei> <fleet_id> [name]", Summary: "Claim a device into a fleet, then press its pairing button", Run: device.Claim},
 			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices, their state, and when they were last seen", Run: device.List},
 			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: device.Rename},
-			{Name: "device release", Arguments: "<imei>", Summary: "Release a device from its fleet and erase everything on it", Run: device.Release},
+			{Name: "device release", Arguments: "<imei>", Summary: "Release a device from its fleet, wiping its files and restarting its code", Run: device.Release},
 			{Name: "device start", Arguments: "<imei>", Summary: "Start the code on a device"},
 			{Name: "device stop", Arguments: "<imei>", Summary: "Stop the code on a device"},
 			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on a device"},
@@ -68,11 +68,11 @@ var sections = []dispatch.Section{
 		},
 	},
 	{
-		Title: "Keys",
+		Title: "Fleet keys",
 		Commands: []dispatch.Command{
-			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a key for sending data to a fleet", Run: key.Create},
-			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the keys that can reach your fleets", Run: key.List},
-			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a key from reaching its fleet", Run: key.Revoke},
+			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a fleet key for sending data to the fleet", Run: key.Create},
+			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the fleet keys that can reach your fleets", Run: key.List},
+			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a fleet key from reaching its fleet", Run: key.Revoke},
 		},
 	},
 	{

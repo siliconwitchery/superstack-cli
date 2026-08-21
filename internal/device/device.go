@@ -86,7 +86,7 @@ func Claim(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Claimed the device into %q.\n", fleetName)
+	fmt.Fprintf(session.Out, "Claimed device %s into fleet %q.\n", imei, fleetName)
 
 	return nil
 }
@@ -297,7 +297,7 @@ func Rename(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Renamed the device to %q.\n", name)
+	fmt.Fprintf(session.Out, "Renamed device %s to %q.\n", imei, name)
 
 	return nil
 }
@@ -320,10 +320,18 @@ func Release(session api.Session, arguments []string) error {
 	}
 
 	fleetId := int64(0)
+	label := ""
 
 	for _, device := range devices {
-		if device.Imei == imei {
-			fleetId = device.FleetId
+		if device.Imei != imei {
+			continue
+		}
+
+		fleetId = device.FleetId
+		label = imei
+
+		if device.Name != nil && *device.Name != "" {
+			label = *device.Name
 		}
 	}
 
@@ -349,7 +357,7 @@ func Release(session api.Session, arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fmt.Fprintf(session.Out, "Release the device from %q? It erases everything on the device, and claiming it again means pressing its pairing button in person. [y/N] ", fleetName)
+	fmt.Fprintf(session.Out, "Release device %q from fleet %q? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] ", label, fleetName)
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
@@ -378,7 +386,7 @@ func Release(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintln(session.Out, "Released the device.")
+	fmt.Fprintf(session.Out, "Released device %q from fleet %q.\n", label, fleetName)
 
 	return nil
 }
