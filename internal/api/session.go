@@ -10,8 +10,6 @@ import (
 )
 
 const DefaultBase = "https://supernext.siliconwitchery.com"
-const defaultGithubBase = "https://github.com"
-const defaultGitlabBase = "https://gitlab.com"
 
 type Session struct {
 	Base        string
@@ -27,8 +25,8 @@ type Session struct {
 func NewSession(base string, version string, in io.Reader, out io.Writer) Session {
 	return Session{
 		Base:        base,
-		GithubBase:  defaultGithubBase,
-		GitlabBase:  defaultGitlabBase,
+		GithubBase:  "https://github.com",
+		GitlabBase:  "https://gitlab.com",
 		Version:     version,
 		Client:      &http.Client{Timeout: 30 * time.Second},
 		In:          in,

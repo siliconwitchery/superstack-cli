@@ -42,18 +42,18 @@ Uploading Lua code and streaming logs are not available yet.
 
 ## Local development
 
-1. Install the toolchain:
-
-    - **Any platform:** [Go](https://go.dev) 1.25 or newer.
-    - **Nix:** `nix develop`, or `direnv allow` once with
-      [direnv](https://direnv.net) hooked into your shell.
-
 1. Clone the repository:
 
     ```sh
-    git clone git@github.com:siliconwitchery/superstack-cli.git ~/projects/superstack-cli
+    git clone https://github.com/siliconwitchery/superstack-cli.git ~/projects/superstack-cli
     cd ~/projects/superstack-cli
     ```
+
+1. Install the toolchain:
+
+    - **Any platform:** [Go](https://go.dev) 1.25 or newer.
+    - **Nix:** `nix develop` from inside the clone, or `direnv allow` once with
+      [direnv](https://direnv.net) hooked into your shell.
 
 1. Build and run:
 
@@ -88,7 +88,9 @@ Uploading Lua code and streaming logs are not available yet.
     git switch -C dev origin/main
     ```
 
-1. Change `version` in `main.go`, run the checks, commit, and push:
+1. Change `version` in `main.go`.
+
+1. Run every check:
 
     ```sh
     gofmt -l .
@@ -97,6 +99,11 @@ Uploading Lua code and streaming logs are not available yet.
     CGO_ENABLED=0 go vet ./...
     CGO_ENABLED=0 go test ./...
     git diff --check
+    ```
+
+1. Commit and push:
+
+    ```sh
     git add main.go
     git commit -m "Version <version>"
     git push -u origin dev

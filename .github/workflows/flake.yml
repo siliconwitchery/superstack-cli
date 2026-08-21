@@ -1,0 +1,58 @@
+name: flake
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/flake.yml
+      - flake.lock
+      - flake.nix
+      - go.mod
+      - main.go
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flake-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build the package the flake defines
+        run: nix build --print-build-logs .#superstack
+
+      - name: Verify the flake and the binary it built agree with main.go
+        run: |
+          declared=$(sed -n 's/^const version = "\(.*\)"$/\1/p' main.go)
+
+          if [ -z "$declared" ]; then
+            echo "could not read 'const version' from main.go"
+            exit 1
+          fi
+
+          evaluated=$(nix eval --raw .#superstack.version)
+
+          if [ "$evaluated" != "$declared" ]; then
+            echo "main.go declares $declared, but flake.nix reads $evaluated"
+            exit 1
+          fi
+
+          reported=$(./result/bin/superstack --version)
+
+          if [ "$reported" != "$declared" ]; then
+            echo "main.go declares $declared, but the built binary reports $reported"
+            exit 1
+          fi

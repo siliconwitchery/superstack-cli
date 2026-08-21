@@ -90,11 +90,17 @@ func TestFleetList(t *testing.T) {
 		name       string
 		arguments  []string
 		fleets     string
+		refusal    string
 		wantShown  []string
 		wantAbsent []string
 		wantExact  string
 		wantError  string
 	}{
+		{
+			name:      "server refusal",
+			refusal:   "fleets unavailable",
+			wantError: "fleets unavailable",
+		},
 		{
 			name:      "some fleets",
 			fleets:    `[{"id":1,"name":"field trial","owner":true},{"id":2,"name":"rooftop","owner":false}]`,
@@ -130,6 +136,11 @@ func TestFleetList(t *testing.T) {
 			mux := http.NewServeMux()
 
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusServiceUnavailable)
+					return
+				}
+
 				fmt.Fprint(w, test.fleets)
 			})
 

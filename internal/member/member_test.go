@@ -217,6 +217,7 @@ func TestMemberRemove(t *testing.T) {
 		name        string
 		email       string
 		answer      string
+		fleets      string
 		refusal     string
 		wantRemoved bool
 		wantShown   string
@@ -230,6 +231,7 @@ func TestMemberRemove(t *testing.T) {
 		{name: "declined with n", email: "member@example.com", answer: "n\n", wantShown: "Nothing removed"},
 		{name: "closed input", email: "member@example.com", wantShown: "Nothing removed"},
 		{name: "server refusal", email: "member@example.com", answer: "y\n", refusal: "only an owner can remove members", wantRemoved: true, wantError: "only an owner can remove members"},
+		{name: "a fleet that is not yours", email: "member@example.com", answer: "y\n", fleets: `[{"id":7,"name":"someone else's","owner":true}]`, wantError: "no such fleet"},
 	}
 
 	for _, test := range tests {
@@ -239,8 +241,14 @@ func TestMemberRemove(t *testing.T) {
 
 			mux := http.NewServeMux()
 
+			fleets := test.fleets
+
+			if fleets == "" {
+				fleets = `[{"id":3,"name":"pilot","owner":true}]`
+			}
+
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
+				fmt.Fprint(w, fleets)
 			})
 
 			mux.HandleFunc("DELETE /fleets/{id}/members/{email}", func(w http.ResponseWriter, r *http.Request) {

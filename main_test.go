@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -201,5 +204,89 @@ func TestHelpRendersTheRealTable(t *testing.T) {
 				t.Errorf("help leaves out %q", entry.Name)
 			}
 		}
+	}
+}
+
+// Re-runs this test binary as a child so main's own exit codes are observed
+// rather than the error its command returned.
+func TestMainReportsFailureWithANonZeroExit(t *testing.T) {
+	arguments, isChild := os.LookupEnv("SUPERSTACK_MAIN_ARGUMENTS")
+
+	if isChild {
+		os.Args = append([]string{"superstack"}, strings.Fields(arguments)...)
+
+		main()
+
+		return
+	}
+
+	tests := []struct {
+		name      string
+		arguments string
+		wantCode  int
+		wantSays  string
+	}{
+		{name: "no arguments", arguments: " ", wantCode: 0, wantSays: "Usage: superstack"},
+		{name: "the version", arguments: "version", wantCode: 0},
+		{name: "an unknown command", arguments: "nonsense", wantCode: 1, wantSays: "unknown command"},
+		{name: "a command nobody has built yet", arguments: "tail 111111111111111", wantCode: 1, wantSays: "not available yet"},
+		{name: "a command that needs a login", arguments: "fleet list", wantCode: 1, wantSays: "not logged in"},
+		{name: "a flag with no value", arguments: "--server", wantCode: 1, wantSays: "needs an address"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+
+			command := exec.Command(os.Args[0], "-test.run=TestMainReportsFailureWithANonZeroExit")
+
+			command.Env = append(os.Environ(),
+				"SUPERSTACK_MAIN_ARGUMENTS="+test.arguments,
+				"HOME="+home,
+				"XDG_STATE_HOME="+home,
+				"AppData="+home,
+			)
+
+			output, err := command.CombinedOutput()
+
+			code := 0
+			exitError, wasExit := err.(*exec.ExitError)
+
+			switch {
+			case wasExit:
+				code = exitError.ExitCode()
+
+			case err != nil:
+				t.Fatal(err)
+			}
+
+			if code != test.wantCode {
+				t.Errorf("superstack %s exited %d, want %d, having said %q", test.arguments, code, test.wantCode, output)
+			}
+
+			if test.wantSays != "" && !strings.Contains(string(output), test.wantSays) {
+				t.Errorf("superstack %s said %q, want it to mention %q", test.arguments, output, test.wantSays)
+			}
+		})
+	}
+}
+
+func TestTheModuleStaysDependencyFree(t *testing.T) {
+	module, err := os.ReadFile("go.mod")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, line := range strings.Split(string(module), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "require") {
+			t.Errorf("go.mod says %q, so flake.nix cannot keep vendorHash = null", strings.TrimSpace(line))
+		}
+	}
+
+	_, err = os.Stat("go.sum")
+
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Error("go.sum exists, so something is vendored and flake.nix needs a real vendorHash")
 	}
 }

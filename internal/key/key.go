@@ -123,7 +123,9 @@ func List(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(session.Out).Encode(keys)
+		err = json.NewEncoder(session.Out).Encode(keys)
+
+		return err
 	}
 
 	if len(keys) == 0 {
@@ -158,6 +160,8 @@ func List(session api.Session, arguments []string) error {
 		fleetNameWidth = max(fleetNameWidth, len(fleetNameValues[index]))
 	}
 
+	// KEY is fixed at eight: the server sends a five-character suffix and the
+	// cell prefixes it with three dots, so a shorter suffix would skew LABEL.
 	fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-8s  %s\n",
 		idWidth, "ID", fleetIdWidth, "FLEET", fleetNameWidth, "FLEET NAME", "KEY", "LABEL")
 

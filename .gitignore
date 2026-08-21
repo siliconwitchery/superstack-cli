@@ -2,6 +2,9 @@
 /superstack
 /superstack-cli
 
+# Compiled test binaries, which go test leaves behind when a run is interrupted
+*.test
+
 # GoReleaser output
 /dist/
 

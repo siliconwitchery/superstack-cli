@@ -9,39 +9,6 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func takeServerFlag(arguments []string) ([]string, string, error) {
-	remaining := []string{}
-
-	base := api.DefaultBase
-
-	for index := 0; index < len(arguments); index++ {
-		switch {
-		case arguments[index] == "--server":
-			if index+1 == len(arguments) {
-				return nil, "", errors.New("--server needs an address")
-			}
-
-			index++
-
-			base = arguments[index]
-
-		case strings.HasPrefix(arguments[index], "--server="):
-			base = strings.TrimPrefix(arguments[index], "--server=")
-
-		default:
-			remaining = append(remaining, arguments[index])
-		}
-	}
-
-	base = strings.TrimRight(base, "/")
-
-	if base == "" {
-		return nil, "", errors.New("--server needs an address")
-	}
-
-	return remaining, base, nil
-}
-
 type Command struct {
 	Name      string
 	Arguments string
@@ -127,11 +94,35 @@ func printHelp(session api.Session, sections []Section) {
 }
 
 func Dispatch(sections []Section, version string, arguments []string, in io.Reader, out io.Writer) error {
-	arguments, base, err := takeServerFlag(arguments)
+	remaining := []string{}
+	base := api.DefaultBase
 
-	if err != nil {
-		return err
+	for index := 0; index < len(arguments); index++ {
+		switch {
+		case arguments[index] == "--server":
+			if index+1 == len(arguments) {
+				return errors.New("--server needs an address")
+			}
+
+			index++
+
+			base = arguments[index]
+
+		case strings.HasPrefix(arguments[index], "--server="):
+			base = strings.TrimPrefix(arguments[index], "--server=")
+
+		default:
+			remaining = append(remaining, arguments[index])
+		}
 	}
+
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+
+	if base == "" {
+		return errors.New("--server needs an address")
+	}
+
+	arguments = remaining
 
 	session := api.NewSession(base, version, in, out)
 
@@ -187,7 +178,7 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 		return fmt.Errorf("%s is not available yet", entry.Name)
 	}
 
-	err = entry.Run(session, rest)
+	err := entry.Run(session, rest)
 
 	return err
 }

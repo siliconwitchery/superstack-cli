@@ -15,8 +15,6 @@ import (
 )
 
 func Claim(session api.Session, arguments []string) error {
-	claimClient := &http.Client{Timeout: 90 * time.Second}
-
 	if len(arguments) != 2 && len(arguments) != 3 {
 		return errors.New("device claim takes an IMEI, a fleet id, and an optional name")
 	}
@@ -73,6 +71,8 @@ func Claim(session api.Session, arguments []string) error {
 	}
 
 	request.Header.Set("Content-Type", "application/json")
+
+	claimClient := &http.Client{Timeout: 90 * time.Second}
 
 	response, err := claimClient.Do(request)
 
@@ -143,7 +143,9 @@ func List(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(session.Out).Encode(filtered)
+		err = json.NewEncoder(session.Out).Encode(filtered)
+
+		return err
 	}
 
 	if len(filtered) == 0 {

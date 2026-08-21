@@ -66,7 +66,9 @@ func Balance(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(session.Out).Encode(balances)
+		err = json.NewEncoder(session.Out).Encode(balances)
+
+		return err
 	}
 
 	if len(balances) == 0 {
@@ -166,7 +168,7 @@ func Delete(session api.Session, arguments []string) error {
 		return errors.New("account delete takes no arguments")
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodGet, "/", nil)
+	request, err := api.AuthenticatedRequest(session, http.MethodGet, "/fleets", nil)
 
 	if err != nil {
 		return err
@@ -178,11 +180,15 @@ func Delete(session api.Session, arguments []string) error {
 		return errors.New("the server could not be reached, check your connection")
 	}
 
-	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		refusal := api.ServerError(response)
 
-	if response.StatusCode == http.StatusUnauthorized {
-		return errors.New("you are not logged in, run login first")
+		response.Body.Close()
+
+		return refusal
 	}
+
+	response.Body.Close()
 
 	fmt.Fprint(session.Out, "Delete your account, its logins, and your access to every fleet? This cannot be undone. [y/N] ")
 

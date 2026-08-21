@@ -12,12 +12,8 @@ import (
 	"strings"
 )
 
-// Larger than any answer the server can produce: it caps fleets at 100 per
-// user and keys at 100 per fleet, and only the device list is uncapped.
-const maximumBody = 32 << 20
-
-func Request(session Session, method string, path string, body io.Reader) (*http.Request, error) {
-	request, err := http.NewRequest(method, strings.TrimSuffix(session.Base, "/")+path, body)
+func Request(session Session, method string, path string, reader io.Reader) (*http.Request, error) {
+	request, err := http.NewRequest(method, strings.TrimSuffix(session.Base, "/")+path, reader)
 
 	if err != nil {
 		return nil, err
@@ -28,7 +24,7 @@ func Request(session Session, method string, path string, body io.Reader) (*http
 	return request, nil
 }
 
-func AuthenticatedRequest(session Session, method string, path string, body io.Reader) (*http.Request, error) {
+func AuthenticatedRequest(session Session, method string, path string, reader io.Reader) (*http.Request, error) {
 	storedKeyPath, err := KeyPath()
 
 	if err != nil {
@@ -51,7 +47,7 @@ func AuthenticatedRequest(session Session, method string, path string, body io.R
 		return nil, errors.New("you are not logged in, run login first")
 	}
 
-	request, err := Request(session, method, path, body)
+	request, err := Request(session, method, path, reader)
 
 	if err != nil {
 		return nil, err
@@ -75,7 +71,8 @@ func ServerError(response *http.Response) error {
 }
 
 func Decode(response *http.Response, value any) error {
-	err := json.NewDecoder(io.LimitReader(response.Body, maximumBody)).Decode(value)
+	// 32 MiB is past every capped list and is the ceiling on the uncapped ones.
+	err := json.NewDecoder(io.LimitReader(response.Body, 32<<20)).Decode(value)
 
 	if err != nil {
 		return errors.New("the server's answer could not be read, try again in a moment")
@@ -93,7 +90,7 @@ func KeyPath() (string, error) {
 			home, err := os.UserHomeDir()
 
 			if err != nil {
-				return "", errors.New("your home folder could not be found, so the login has nowhere to live")
+				return "", errors.New("your home folder could not be found, so the login cannot be read or saved")
 			}
 
 			stateHome = filepath.Join(home, ".local", "state")
@@ -105,7 +102,7 @@ func KeyPath() (string, error) {
 	configDirectory, err := os.UserConfigDir()
 
 	if err != nil {
-		return "", errors.New("your settings folder could not be found, so the login has nowhere to live")
+		return "", errors.New("your settings folder could not be found, so the login cannot be read or saved")
 	}
 
 	return filepath.Join(configDirectory, "superstack", "key"), nil
