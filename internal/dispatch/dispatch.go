@@ -33,7 +33,7 @@ func takeServerFlag(arguments []string) ([]string, string, error) {
 		}
 	}
 
-	base = strings.TrimRight(base, "/")
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
 
 	if base == "" {
 		return nil, "", errors.New("--server needs an address")

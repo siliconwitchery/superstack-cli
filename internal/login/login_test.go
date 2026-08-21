@@ -643,3 +643,134 @@ func TestLoginReplacesAStoredLoginLeftTooOpen(t *testing.T) {
 		t.Errorf("the login folder holds %d files, want only the stored login", len(entries))
 	}
 }
+
+func TestLoginShowsTheCodeAndWhereToEnterIt(t *testing.T) {
+	apitest.IsolateKeyStorage(t)
+
+	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
+	session, out := fakeSuperstack(t, "", "")
+	session.GitlabBase = providerBase
+
+	err := Login(session, []string{"gitlab"})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "Copy your one-time code: WDJB-MJHT\n" +
+		"Then enter it at https://gitlab.com/-/user_settings/device?user_code=WDJB-MJHT\n" +
+		"Press enter to open the browser.\n" +
+		"Logged in as someone@example.com.\n"
+
+	if out.String() != want {
+		t.Errorf("output = %q, want %q", out.String(), want)
+	}
+}
+
+func TestLoginKeepsAWorkingLoginWhenTheNewOneCannotBeSaved(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the folder mode this test rests on")
+	}
+
+	apitest.IsolateKeyStorage(t)
+
+	path, err := api.KeyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	directory := filepath.Dir(path)
+
+	err = os.MkdirAll(directory, 0o700)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(path, []byte("ssk_working\n"), 0o600)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.Chmod(directory, 0o500)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { os.Chmod(directory, 0o700) })
+
+	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
+	session, out := fakeSuperstack(t, "", "")
+	session.GitlabBase = providerBase
+
+	err = Login(session, []string{"gitlab"})
+
+	if err == nil || !strings.Contains(err.Error(), "could not be saved") {
+		t.Fatalf("error = %v, want it to say the login could not be saved", err)
+	}
+
+	stored, err := os.ReadFile(path)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.TrimSpace(string(stored)) != "ssk_working" {
+		t.Errorf("the stored login is %q, want the working one left untouched", strings.TrimSpace(string(stored)))
+	}
+
+	if strings.Contains(out.String(), "Logged in as") {
+		t.Errorf("output = %q, want no claim that the login succeeded", out.String())
+	}
+}
+
+func TestLogoutToleratesALoginAlreadyRemoved(t *testing.T) {
+	apitest.IsolateKeyStorage(t)
+
+	path, err := api.KeyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Dir(path), 0o700)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(path, []byte("ssk_test\n"), 0o600)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+
+	// Another shell logs out, or deletes the account, during the round trip.
+	mux.HandleFunc("POST /logout", func(w http.ResponseWriter, r *http.Request) {
+		os.Remove(path)
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	server := httptest.NewServer(mux)
+
+	defer server.Close()
+
+	out := &bytes.Buffer{}
+	session := api.NewSession(server.URL, "test", strings.NewReader(""), out)
+
+	err = Logout(session, nil)
+
+	if err != nil {
+		t.Fatalf("error = %v, want a login already removed to be no failure", err)
+	}
+
+	if out.String() != "Logged out.\n" {
+		t.Errorf("output = %q, want %q", out.String(), "Logged out.\n")
+	}
+}

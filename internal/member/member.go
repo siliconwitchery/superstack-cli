@@ -103,7 +103,9 @@ func List(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(session.Out).Encode(people)
+		err = json.NewEncoder(session.Out).Encode(people)
+
+		return err
 	}
 
 	owner := api.Printable(people.Owner)

@@ -18,8 +18,6 @@ import (
 )
 
 func Login(session api.Session, arguments []string) error {
-	oauthClient := &http.Client{Timeout: 30 * time.Second}
-
 	if len(arguments) != 1 || (arguments[0] != "github" && arguments[0] != "gitlab") {
 		return errors.New("login takes a provider: github or gitlab")
 	}
@@ -90,6 +88,8 @@ func Login(session api.Session, arguments []string) error {
 	codeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	codeRequest.Header.Set("Accept", "application/json")
 
+	oauthClient := &http.Client{Timeout: 30 * time.Second}
+
 	codeResponse, err := oauthClient.Do(codeRequest)
 
 	if err != nil {
@@ -138,11 +138,10 @@ func Login(session api.Session, arguments []string) error {
 
 	deadline := time.Now().Add(time.Duration(code.ExpiresIn) * time.Second)
 
-	const defaultPollInterval = 5
 	interval := code.Interval
 
 	if interval <= 0 {
-		interval = defaultPollInterval
+		interval = 5 // RFC 8628 section 3.2: the default when a provider omits it
 	}
 
 	accessToken := ""
@@ -200,7 +199,7 @@ func Login(session api.Session, arguments []string) error {
 		case "authorization_pending":
 
 		case "slow_down":
-			interval += 5
+			interval += 5 // RFC 8628 section 3.5: each slow_down adds five seconds
 
 		case "expired_token":
 			return errors.New("the code expired before it was entered, run login again")
@@ -356,7 +355,7 @@ func Logout(session api.Session, arguments []string) error {
 
 	err = os.Remove(path)
 
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("the login stored at %s is no longer valid but could not be removed, delete it yourself", path)
 	}
 

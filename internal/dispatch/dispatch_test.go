@@ -58,6 +58,17 @@ func TestTakeServerFlag(t *testing.T) {
 			wantError: "needs an address",
 		},
 		{
+			name:      "a value that is only spaces",
+			arguments: []string{"login", "--server", "   "},
+			wantError: "needs an address",
+		},
+		{
+			name:          "surrounding spaces are trimmed",
+			arguments:     []string{"--server", "  http://localhost:8080/  ", "login"},
+			wantRemaining: "login",
+			wantBase:      "http://localhost:8080",
+		},
+		{
 			name:      "an empty value from an unset shell variable",
 			arguments: []string{"--server", "", "login"},
 			wantError: "needs an address",

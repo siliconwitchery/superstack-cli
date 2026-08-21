@@ -18,6 +18,7 @@ func TestAccountBalance(t *testing.T) {
 		arguments  []string
 		fleets     string
 		balances   string
+		refusal    string
 		wantLines  []string
 		wantAbsent []string
 		wantExact  string
@@ -82,11 +83,25 @@ func TestAccountBalance(t *testing.T) {
 			wantExact: "No credit on that fleet yet.\n",
 		},
 		{
+			name:      "a fleet the list does not name",
+			arguments: []string{},
+			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
+			balances:  `[{"fleet":99,"balance":"15.000000","currency":"eur"}]`,
+			wantLines: []string{"99  -"},
+		},
+		{
 			name:      "an unknown fleet",
 			arguments: []string{"9"},
 			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
 			balances:  `[]`,
 			wantError: "no such fleet",
+		},
+		{
+			name:      "server refusal",
+			arguments: []string{},
+			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
+			refusal:   "balances unavailable",
+			wantError: "balances unavailable",
 		},
 		{
 			name:      "a wordy id",
@@ -109,6 +124,11 @@ func TestAccountBalance(t *testing.T) {
 			})
 
 			mux.HandleFunc("GET /balance", func(w http.ResponseWriter, r *http.Request) {
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusServiceUnavailable)
+					return
+				}
+
 				fmt.Fprint(w, test.balances)
 			})
 
@@ -330,6 +350,12 @@ func TestAccountDelete(t *testing.T) {
 
 			mux := http.NewServeMux()
 
+			// The command asks the server whether the stored login still works
+			// before it puts the question, so every case has to answer this.
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[]`)
+			})
+
 			mux.HandleFunc("DELETE /account", func(w http.ResponseWriter, r *http.Request) {
 				deleted = true
 
@@ -404,10 +430,17 @@ func TestAccountDeleteAsksNothingWhenTheServerIsGone(t *testing.T) {
 }
 
 func TestAccountDeleteStopsWhenTheStoredLoginIsNoLongerValid(t *testing.T) {
+	deleted := false
+
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
+	// What the server's own auth middleware answers for a revoked login.
+	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "the login is no longer valid, log in again", http.StatusUnauthorized)
+	})
+
+	mux.HandleFunc("DELETE /account", func(w http.ResponseWriter, r *http.Request) {
+		deleted = true
 	})
 
 	session, out := apitest.LoggedInSession(t, mux)
@@ -416,11 +449,15 @@ func TestAccountDeleteStopsWhenTheStoredLoginIsNoLongerValid(t *testing.T) {
 
 	err := Delete(session, nil)
 
-	if err == nil || !strings.Contains(err.Error(), "not logged in") {
-		t.Fatalf("error = %v, want it to say the login is not valid", err)
+	if err == nil || !strings.Contains(err.Error(), "no longer valid") {
+		t.Fatalf("error = %v, want the server's own refusal", err)
 	}
 
 	if out.String() != "" {
 		t.Errorf("output = %q, want the question never to be put", out.String())
+	}
+
+	if deleted {
+		t.Error("the server saw the account deleted although the login was refused")
 	}
 }

@@ -153,7 +153,14 @@ func TestKeyList(t *testing.T) {
 		wantHidden []string
 		wantError  string
 		keys       string
+		refusal    string
 	}{
+		{
+			name:      "server refusal",
+			arguments: []string{},
+			refusal:   "keys unavailable",
+			wantError: "keys unavailable",
+		},
 		{
 			name:      "every fleet's keys",
 			arguments: []string{},
@@ -197,6 +204,12 @@ func TestKeyList(t *testing.T) {
 			wantHidden: []string{`"id":2`, "ID  FLEET"},
 		},
 		{
+			name:      "a fleet the list does not name",
+			arguments: []string{},
+			keys:      `[{"id":1,"fleet":99,"label":"orphan","suffix":"ab2de"}]`,
+			wantShown: []string{"99     -"},
+		},
+		{
 			name:      "a fleet out of reach",
 			arguments: []string{"9"},
 			wantError: "no such fleet",
@@ -228,6 +241,11 @@ func TestKeyList(t *testing.T) {
 			})
 
 			mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
+				if test.refusal != "" {
+					http.Error(w, test.refusal, http.StatusServiceUnavailable)
+					return
+				}
+
 				fmt.Fprint(w, servedKeys)
 			})
 

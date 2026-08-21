@@ -74,7 +74,9 @@ func List(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		return json.NewEncoder(session.Out).Encode(fleets)
+		err = json.NewEncoder(session.Out).Encode(fleets)
+
+		return err
 	}
 
 	if len(fleets) == 0 {
