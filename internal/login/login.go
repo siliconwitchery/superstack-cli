@@ -49,7 +49,7 @@ func Login(session api.Session, arguments []string) error {
 		GitlabClientId string `json:"gitlab_client_id"`
 	}{}
 
-	err = json.NewDecoder(providersResponse.Body).Decode(&providers)
+	err = api.Decode(providersResponse, &providers)
 
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func Login(session api.Session, arguments []string) error {
 		Error                   string `json:"error"`
 	}{}
 
-	err = json.NewDecoder(codeResponse.Body).Decode(&code)
+	err = api.Decode(codeResponse, &code)
 
 	if err != nil {
 		return fmt.Errorf("%s would not start the login, try again", provider)
@@ -124,8 +124,8 @@ func Login(session api.Session, arguments []string) error {
 		enterAt = code.VerificationUriComplete
 	}
 
-	fmt.Fprintf(session.Out, "Copy your one-time code: %s\n", code.UserCode)
-	fmt.Fprintf(session.Out, "Then enter it at %s\n", enterAt)
+	fmt.Fprintf(session.Out, "Copy your one-time code: %s\n", api.Printable(code.UserCode))
+	fmt.Fprintf(session.Out, "Then enter it at %s\n", api.Printable(enterAt))
 	fmt.Fprintln(session.Out, "Press enter to open the browser.")
 
 	go func() {
@@ -181,7 +181,7 @@ func Login(session api.Session, arguments []string) error {
 			Error       string `json:"error"`
 		}{}
 
-		err = json.NewDecoder(pollResponse.Body).Decode(&poll)
+		err = api.Decode(pollResponse, &poll)
 
 		pollResponse.Body.Close()
 
@@ -247,7 +247,7 @@ func Login(session api.Session, arguments []string) error {
 		Email string `json:"email"`
 	}{}
 
-	err = json.NewDecoder(loginResponse.Body).Decode(&login)
+	err = api.Decode(loginResponse, &login)
 
 	if err != nil {
 		return err
@@ -263,19 +263,42 @@ func Login(session api.Session, arguments []string) error {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Dir(path), 0o700)
+	directory := filepath.Dir(path)
+
+	err = os.MkdirAll(directory, 0o700)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
 	}
 
-	err = os.WriteFile(path, []byte(login.Key+"\n"), 0o600)
+	temporary, err := os.CreateTemp(directory, "key")
 
 	if err != nil {
-		return err
+		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
 	}
 
-	fmt.Fprintf(session.Out, "Logged in as %s.\n", login.Email)
+	defer os.Remove(temporary.Name())
+
+	_, err = temporary.WriteString(login.Key + "\n")
+
+	if err != nil {
+		temporary.Close()
+		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
+	}
+
+	err = temporary.Close()
+
+	if err != nil {
+		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
+	}
+
+	err = os.Rename(temporary.Name(), path)
+
+	if err != nil {
+		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
+	}
+
+	fmt.Fprintf(session.Out, "Logged in as %s.\n", api.Printable(login.Email))
 
 	return nil
 }
@@ -299,7 +322,14 @@ func Logout(session api.Session, arguments []string) error {
 	}
 
 	if err != nil {
-		return err
+		return errors.New("the login stored on this computer could not be read")
+	}
+
+	key := strings.TrimSpace(string(keyBytes))
+
+	if key == "" {
+		fmt.Fprintln(session.Out, "Not logged in.")
+		return nil
 	}
 
 	revokeRequest, err := api.Request(session, http.MethodPost, "/logout", nil)
@@ -308,7 +338,7 @@ func Logout(session api.Session, arguments []string) error {
 		return err
 	}
 
-	revokeRequest.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(keyBytes)))
+	revokeRequest.Header.Set("Authorization", "Bearer "+key)
 
 	revokeResponse, err := session.Client.Do(revokeRequest)
 
@@ -322,13 +352,13 @@ func Logout(session api.Session, arguments []string) error {
 		return fmt.Errorf("you are still logged in: %s", api.ServerError(revokeResponse))
 	}
 
+	fmt.Fprintln(session.Out, "Logged out.")
+
 	err = os.Remove(path)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("the login stored at %s is no longer valid but could not be removed, delete it yourself", path)
 	}
-
-	fmt.Fprintln(session.Out, "Logged out.")
 
 	return nil
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 )
@@ -37,7 +36,7 @@ func FetchDevices(session Session) ([]DeviceEntry, error) {
 
 	devices := []DeviceEntry{}
 
-	err = json.NewDecoder(response.Body).Decode(&devices)
+	err = Decode(response, &devices)
 
 	if err != nil {
 		return nil, err

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -35,7 +34,7 @@ func FetchBalances(session Session) ([]BalanceEntry, error) {
 
 	balances := []BalanceEntry{}
 
-	err = json.NewDecoder(response.Body).Decode(&balances)
+	err = Decode(response, &balances)
 
 	if err != nil {
 		return nil, err

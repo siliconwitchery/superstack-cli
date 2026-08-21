@@ -449,6 +449,7 @@ func TestLogout(t *testing.T) {
 		name           string
 		arguments      []string
 		storedKey      string
+		storeEmptyKey  bool
 		serverDown     bool
 		revokeStatus   int
 		wantError      string
@@ -471,6 +472,12 @@ func TestLogout(t *testing.T) {
 		{
 			name:      "nothing stored",
 			wantShown: "Not logged in.\n",
+		},
+		{
+			name:          "an empty stored login",
+			storeEmptyKey: true,
+			wantShown:     "Not logged in.\n",
+			wantKeyKept:   true,
 		},
 		{
 			name:           "server refuses the revocation",
@@ -520,7 +527,7 @@ func TestLogout(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if test.storedKey != "" {
+			if test.storedKey != "" || test.storeEmptyKey {
 				err = os.MkdirAll(filepath.Dir(path), 0o700)
 
 				if err != nil {
@@ -566,5 +573,73 @@ func TestLogout(t *testing.T) {
 				t.Errorf("output = %q, want %q", out.String(), test.wantShown)
 			}
 		})
+	}
+}
+
+func TestLoginReplacesAStoredLoginLeftTooOpen(t *testing.T) {
+	apitest.IsolateKeyStorage(t)
+
+	path, err := api.KeyPath()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Dir(path), 0o700)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(path, []byte("ssk_stale\n"), 0o600)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.Chmod(path, 0o644)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
+	session, _ := fakeSuperstack(t, "", "")
+	session.GitlabBase = providerBase
+
+	err = Login(session, []string{"gitlab"})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	information, err := os.Stat(path)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if information.Mode().Perm() != 0o600 {
+		t.Errorf("the stored login is mode %v, want it narrowed to 0600", information.Mode().Perm())
+	}
+
+	stored, err := os.ReadFile(path)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.TrimSpace(string(stored)) != "ssk_test" {
+		t.Errorf("the stored login is %q, want the one just issued", strings.TrimSpace(string(stored)))
+	}
+
+	entries, err := os.ReadDir(filepath.Dir(path))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(entries) != 1 {
+		t.Errorf("the login folder holds %d files, want only the stored login", len(entries))
 	}
 }

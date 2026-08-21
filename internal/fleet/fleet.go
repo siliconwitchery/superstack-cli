@@ -49,7 +49,7 @@ func Create(session api.Session, arguments []string) error {
 		Name string `json:"name"`
 	}{}
 
-	err = json.NewDecoder(response.Body).Decode(&created)
+	err = api.Decode(response, &created)
 
 	if err != nil {
 		return err
@@ -84,22 +84,24 @@ func List(session api.Session, arguments []string) error {
 
 	idWidth := len("ID")
 	nameWidth := len("NAME")
+	nameValues := make([]string, len(fleets))
 
-	for _, fleet := range fleets {
+	for index, fleet := range fleets {
+		nameValues[index] = api.Printable(fleet.Name)
 		idWidth = max(idWidth, len(strconv.FormatInt(fleet.Id, 10)))
-		nameWidth = max(nameWidth, len(fleet.Name))
+		nameWidth = max(nameWidth, len(nameValues[index]))
 	}
 
 	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "ROLE")
 
-	for _, fleet := range fleets {
+	for index, fleet := range fleets {
 		role := "member"
 
 		if fleet.Owner {
 			role = "owner"
 		}
 
-		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, fleet.Id, nameWidth, fleet.Name, role)
+		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, fleet.Id, nameWidth, nameValues[index], role)
 	}
 
 	return nil
@@ -283,7 +285,7 @@ func Delete(session api.Session, arguments []string) error {
 		}
 
 		if value > 0 {
-			forfeited = formatted
+			forfeited = api.Printable(formatted)
 		}
 	}
 

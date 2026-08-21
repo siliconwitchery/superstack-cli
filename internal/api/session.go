@@ -3,6 +3,7 @@ package api
 import (
 	"io"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"time"
@@ -20,7 +21,7 @@ type Session struct {
 	Client      *http.Client
 	In          io.Reader
 	Out         io.Writer
-	OpenBrowser func(url string)
+	OpenBrowser func(link string)
 }
 
 func NewSession(base string, version string, in io.Reader, out io.Writer) Session {
@@ -36,18 +37,28 @@ func NewSession(base string, version string, in io.Reader, out io.Writer) Sessio
 	}
 }
 
-func openBrowser(url string) {
+func openBrowser(link string) {
+	address, err := url.Parse(link)
+
+	if err != nil {
+		return
+	}
+
+	if address.Scheme != "http" && address.Scheme != "https" {
+		return
+	}
+
 	var command *exec.Cmd
 
 	switch runtime.GOOS {
 	case "darwin":
-		command = exec.Command("open", url)
+		command = exec.Command("open", link)
 
 	case "windows":
-		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", link)
 
 	default:
-		command = exec.Command("xdg-open", url)
+		command = exec.Command("xdg-open", link)
 	}
 
 	_ = command.Start()

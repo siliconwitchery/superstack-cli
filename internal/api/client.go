@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -10,6 +11,10 @@ import (
 	"runtime"
 	"strings"
 )
+
+// Larger than any answer the server can produce: it caps fleets at 100 per
+// user and keys at 100 per fleet, and only the device list is uncapped.
+const maximumBody = 32 << 20
 
 func Request(session Session, method string, path string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, strings.TrimSuffix(session.Base, "/")+path, body)
@@ -37,7 +42,7 @@ func AuthenticatedRequest(session Session, method string, path string, body io.R
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New("the login stored on this computer could not be read")
 	}
 
 	key := strings.TrimSpace(string(keyBytes))
@@ -66,7 +71,17 @@ func ServerError(response *http.Response) error {
 		return errors.New("that did not go through, try again in a moment")
 	}
 
-	return errors.New(detail)
+	return errors.New(Printable(detail))
+}
+
+func Decode(response *http.Response, value any) error {
+	err := json.NewDecoder(io.LimitReader(response.Body, maximumBody)).Decode(value)
+
+	if err != nil {
+		return errors.New("the server's answer could not be read, try again in a moment")
+	}
+
+	return nil
 }
 
 func KeyPath() (string, error) {
@@ -78,7 +93,7 @@ func KeyPath() (string, error) {
 			home, err := os.UserHomeDir()
 
 			if err != nil {
-				return "", err
+				return "", errors.New("your home folder could not be found, so the login has nowhere to live")
 			}
 
 			stateHome = filepath.Join(home, ".local", "state")
@@ -90,7 +105,7 @@ func KeyPath() (string, error) {
 	configDirectory, err := os.UserConfigDir()
 
 	if err != nil {
-		return "", err
+		return "", errors.New("your settings folder could not be found, so the login has nowhere to live")
 	}
 
 	return filepath.Join(configDirectory, "superstack", "key"), nil

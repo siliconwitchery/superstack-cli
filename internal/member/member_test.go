@@ -109,6 +109,13 @@ func TestMemberList(t *testing.T) {
 			wantShown: []string{"EMAIL", "ROLE", "owner@example.com", "owner", "member@example.com", "member"},
 		},
 		{
+			name:      "addresses with control characters are escaped",
+			arguments: []string{"3"},
+			people:    `{"owner":"\u001bowner@example.com","members":["\u001bmember@example.com"]}`,
+			wantFleet: "3",
+			wantShown: []string{`\x1bowner@example.com`, `\x1bmember@example.com`},
+		},
+		{
 			name:      "nobody but the owner",
 			arguments: []string{"7"},
 			people:    `{"owner":"owner@example.com","members":[]}`,

@@ -180,21 +180,21 @@ func List(session api.Session, arguments []string) error {
 		if device.LastSeenAt != nil {
 			seenAt, err := time.Parse(time.RFC3339, *device.LastSeenAt)
 
-			if err != nil {
-				return err
-			}
+			lastSeen = "unknown"
 
-			age := time.Since(seenAt)
+			if err == nil {
+				age := time.Since(seenAt)
 
-			switch {
-			case age < 2*time.Minute:
-				lastSeen = "just now"
-			case age < time.Hour:
-				lastSeen = fmt.Sprintf("%d min ago", int(age.Minutes()))
-			case age < 24*time.Hour:
-				lastSeen = fmt.Sprintf("%d h ago", int(age.Hours()))
-			default:
-				lastSeen = fmt.Sprintf("%d d ago", int(age.Hours()/24))
+				switch {
+				case age < 2*time.Minute:
+					lastSeen = "just now"
+				case age < time.Hour:
+					lastSeen = fmt.Sprintf("%d min ago", int(age.Minutes()))
+				case age < 24*time.Hour:
+					lastSeen = fmt.Sprintf("%d h ago", int(age.Hours()))
+				default:
+					lastSeen = fmt.Sprintf("%d d ago", int(age.Hours()/24))
+				}
 			}
 		}
 
@@ -228,9 +228,15 @@ func List(session api.Session, arguments []string) error {
 			storage = fmt.Sprintf("%s of %s", formatBytes(*device.StorageUsed), formatBytes(*device.StorageTotal))
 		}
 
-		imeiValues[index] = device.Imei
-		nameValues[index] = name
-		fleetValues[index] = fleetNames[device.FleetId]
+		fleetName, known := fleetNames[device.FleetId]
+
+		if !known {
+			fleetName = "-"
+		}
+
+		imeiValues[index] = api.Printable(device.Imei)
+		nameValues[index] = api.Printable(name)
+		fleetValues[index] = api.Printable(fleetName)
 		stateValues[index] = state
 		storageValues[index] = storage
 		lastSeenValues[index] = lastSeen

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 )
@@ -33,7 +32,7 @@ func FetchFleets(session Session) ([]FleetEntry, error) {
 
 	fleets := []FleetEntry{}
 
-	err = json.NewDecoder(response.Body).Decode(&fleets)
+	err = Decode(response, &fleets)
 
 	if err != nil {
 		return nil, err
