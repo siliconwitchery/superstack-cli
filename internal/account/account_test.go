@@ -429,35 +429,64 @@ func TestAccountDeleteAsksNothingWhenTheServerIsGone(t *testing.T) {
 	}
 }
 
-func TestAccountDeleteStopsWhenTheStoredLoginIsNoLongerValid(t *testing.T) {
-	deleted := false
-
-	mux := http.NewServeMux()
-
-	// What the server's own auth middleware answers for a revoked login.
-	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "the login is no longer valid, log in again", http.StatusUnauthorized)
-	})
-
-	mux.HandleFunc("DELETE /account", func(w http.ResponseWriter, r *http.Request) {
-		deleted = true
-	})
-
-	session, out := apitest.LoggedInSession(t, mux)
-
-	session.In = strings.NewReader("y\n")
-
-	err := Delete(session, nil)
-
-	if err == nil || !strings.Contains(err.Error(), "no longer valid") {
-		t.Fatalf("error = %v, want the server's own refusal", err)
+func TestAccountDeleteStopsWhenTheProbeIsRefused(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		body      string
+		wantError string
+	}{
+		{
+			name:      "the login is no longer valid",
+			status:    http.StatusUnauthorized,
+			body:      "the login is no longer valid, log in again",
+			wantError: "no longer valid",
+		},
+		{
+			name:      "the server cannot answer",
+			status:    http.StatusServiceUnavailable,
+			body:      "the server could not list the fleets",
+			wantError: "could not list the fleets",
+		},
+		{
+			name:      "the version gate refuses",
+			status:    http.StatusUpgradeRequired,
+			body:      "update superstack to carry on",
+			wantError: "update superstack",
+		},
 	}
 
-	if out.String() != "" {
-		t.Errorf("output = %q, want the question never to be put", out.String())
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			deleted := false
 
-	if deleted {
-		t.Error("the server saw the account deleted although the login was refused")
+			mux := http.NewServeMux()
+
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, test.body, test.status)
+			})
+
+			mux.HandleFunc("DELETE /account", func(w http.ResponseWriter, r *http.Request) {
+				deleted = true
+			})
+
+			session, out := apitest.LoggedInSession(t, mux)
+
+			session.In = strings.NewReader("y\n")
+
+			err := Delete(session, nil)
+
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("error = %v, want the server's own refusal", err)
+			}
+
+			if out.String() != "" {
+				t.Errorf("output = %q, want the question never to be put", out.String())
+			}
+
+			if deleted {
+				t.Error("the server saw the account deleted although the probe was refused")
+			}
+		})
 	}
 }
