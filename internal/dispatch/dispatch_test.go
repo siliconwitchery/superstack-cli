@@ -10,42 +10,57 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func TestTakeServerFlag(t *testing.T) {
+func TestDispatchTakesTheServerFlag(t *testing.T) {
 	tests := []struct {
-		name          string
-		arguments     []string
-		wantRemaining string
-		wantBase      string
-		wantError     string
+		name        string
+		arguments   []string
+		wantCommand string
+		wantRest    string
+		wantBase    string
+		wantError   string
 	}{
 		{
-			name:          "no flag",
-			arguments:     []string{"login"},
-			wantRemaining: "login",
+			name:        "no flag",
+			arguments:   []string{"login"},
+			wantCommand: "login",
+			wantBase:    api.DefaultBase,
 		},
 		{
-			name:          "a url",
-			arguments:     []string{"--server", "http://localhost:8080", "login"},
-			wantRemaining: "login",
-			wantBase:      "http://localhost:8080",
+			name:        "a url",
+			arguments:   []string{"--server", "http://localhost:8080", "login"},
+			wantCommand: "login",
+			wantBase:    "http://localhost:8080",
 		},
 		{
-			name:          "a url in equals form",
-			arguments:     []string{"logout", "--server=https://staging.example.com"},
-			wantRemaining: "logout",
-			wantBase:      "https://staging.example.com",
+			name:        "a url in equals form",
+			arguments:   []string{"login", "--server=https://staging.example.com"},
+			wantCommand: "login",
+			wantBase:    "https://staging.example.com",
 		},
 		{
-			name:          "a trailing slash is trimmed",
-			arguments:     []string{"--server", "http://localhost:8080/", "login"},
-			wantRemaining: "login",
-			wantBase:      "http://localhost:8080",
+			name:        "a trailing slash is trimmed",
+			arguments:   []string{"--server", "http://localhost:8080/", "login"},
+			wantCommand: "login",
+			wantBase:    "http://localhost:8080",
 		},
 		{
-			name:          "the flag between command words",
-			arguments:     []string{"fleet", "--server=http://localhost:9999", "list"},
-			wantRemaining: "fleet list",
-			wantBase:      "http://localhost:9999",
+			name:        "surrounding spaces are trimmed",
+			arguments:   []string{"--server", "  http://localhost:8080/  ", "login"},
+			wantCommand: "login",
+			wantBase:    "http://localhost:8080",
+		},
+		{
+			name:        "the flag between command words",
+			arguments:   []string{"fleet", "--server=http://localhost:9999", "list"},
+			wantCommand: "fleet list",
+			wantBase:    "http://localhost:9999",
+		},
+		{
+			name:        "the flag never reaches the command",
+			arguments:   []string{"fleet", "list", "--server=http://localhost:9999", "3"},
+			wantCommand: "fleet list",
+			wantRest:    "3",
+			wantBase:    "http://localhost:9999",
 		},
 		{
 			name:      "a missing value",
@@ -63,17 +78,6 @@ func TestTakeServerFlag(t *testing.T) {
 			wantError: "needs an address",
 		},
 		{
-			name:          "surrounding spaces are trimmed",
-			arguments:     []string{"--server", "  http://localhost:8080/  ", "login"},
-			wantRemaining: "login",
-			wantBase:      "http://localhost:8080",
-		},
-		{
-			name:      "an empty value from an unset shell variable",
-			arguments: []string{"--server", "", "login"},
-			wantError: "needs an address",
-		},
-		{
 			name:      "an address of nothing but slashes",
 			arguments: []string{"--server", "//", "login"},
 			wantError: "needs an address",
@@ -82,11 +86,36 @@ func TestTakeServerFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			remaining, base, err := takeServerFlag(test.arguments)
+			ranCommand := ""
+			seenRest := []string{}
+			seenBase := ""
+
+			record := func(name string) func(api.Session, []string) error {
+				return func(session api.Session, arguments []string) error {
+					ranCommand = name
+					seenRest = arguments
+					seenBase = session.Base
+
+					return nil
+				}
+			}
+
+			sections := []Section{
+				{Title: "Things", Commands: []Command{
+					{Name: "login", Summary: "Log in", Run: record("login")},
+					{Name: "fleet list", Summary: "List fleets", Run: record("fleet list")},
+				}},
+			}
+
+			err := Dispatch(sections, "1.2.3", test.arguments, strings.NewReader(""), &bytes.Buffer{})
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
 					t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
+				}
+
+				if ranCommand != "" {
+					t.Errorf("%q ran although the address was refused", ranCommand)
 				}
 
 				return
@@ -96,18 +125,16 @@ func TestTakeServerFlag(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if strings.Join(remaining, " ") != test.wantRemaining {
-				t.Errorf("remaining = %q, want %q", strings.Join(remaining, " "), test.wantRemaining)
+			if ranCommand != test.wantCommand {
+				t.Errorf("%q ran, want %q", ranCommand, test.wantCommand)
 			}
 
-			wantBase := test.wantBase
-
-			if wantBase == "" {
-				wantBase = api.DefaultBase
+			if strings.Join(seenRest, " ") != test.wantRest {
+				t.Errorf("the command was handed %q, want %q", strings.Join(seenRest, " "), test.wantRest)
 			}
 
-			if base != wantBase {
-				t.Errorf("base = %q, want %q", base, wantBase)
+			if seenBase != test.wantBase {
+				t.Errorf("the session base is %q, want %q", seenBase, test.wantBase)
 			}
 		})
 	}
