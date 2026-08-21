@@ -62,7 +62,7 @@ func Create(session api.Session, arguments []string) error {
 		return err
 	}
 
-	fmt.Fprintf(session.Out, "Created key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, created.Key)
+	fmt.Fprintf(session.Out, "Created fleet key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, created.Key)
 
 	return nil
 }
@@ -124,9 +124,9 @@ func List(session api.Session, arguments []string) error {
 
 	if len(keys) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Fprintln(session.Out, "No keys yet. Create one with key create.")
+			fmt.Fprintln(session.Out, "No fleet keys yet. Create one with key create.")
 		} else {
-			fmt.Fprintln(session.Out, "No keys in that fleet.")
+			fmt.Fprintln(session.Out, "No fleet keys on that fleet yet.")
 		}
 
 		return nil
@@ -184,7 +184,7 @@ func Revoke(session api.Session, arguments []string) error {
 		return errors.New("no such key")
 	}
 
-	fmt.Fprintf(session.Out, "Revoke %q? Anything still using it stops reaching the fleet. [y/N] ", label)
+	fmt.Fprintf(session.Out, "Revoke fleet key %q? Anything still using it stops reaching the fleet. [y/N] ", label)
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
@@ -214,7 +214,7 @@ func Revoke(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Revoked key %d.\n", keyId)
+	fmt.Fprintf(session.Out, "Revoked fleet key %q.\n", label)
 
 	return nil
 }

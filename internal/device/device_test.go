@@ -23,7 +23,7 @@ func TestDeviceClaim(t *testing.T) {
 		{
 			name:       "button pressed",
 			statusCode: http.StatusNoContent,
-			wantOutput: "Press the pairing button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n",
+			wantOutput: "Press the pairing button on the device to finish claiming it.\nClaimed device 354820091234567 into fleet \"pilot\".\n",
 		},
 		{
 			name:       "button not pressed",
@@ -117,7 +117,7 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 		t.Error("the request included a name although none was given")
 	}
 
-	if out.String() != "Press the pairing button on the device to finish claiming it.\nClaimed the device into \"pilot\".\n" {
+	if out.String() != "Press the pairing button on the device to finish claiming it.\nClaimed device 354820091234567 into fleet \"pilot\".\n" {
 		t.Errorf("output = %q", out.String())
 	}
 }
@@ -264,7 +264,7 @@ func TestDeviceRename(t *testing.T) {
 		wantOutput string
 		wantError  string
 	}{
-		{name: "renamed", wantOutput: "Renamed the device to \"pilot\".\n"},
+		{name: "renamed", wantOutput: "Renamed device 354820091234567 to \"pilot\".\n"},
 		{name: "server refusal", refusal: "no such device", wantError: "no such device"},
 	}
 
@@ -341,14 +341,16 @@ func TestDeviceRelease(t *testing.T) {
 	tests := []struct {
 		name         string
 		answer       string
+		devices      string
 		fleets       string
 		refusal      string
 		wantReleased bool
 		wantOutput   string
 		wantError    string
 	}{
-		{name: "confirmed", answer: "yes\n", wantReleased: true, wantOutput: "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its pairing button in person. [y/N] Released the device.\n"},
-		{name: "declined", answer: "n\n", wantOutput: "Release the device from \"pilot\"? It erases everything on the device, and claiming it again means pressing its pairing button in person. [y/N] Nothing released.\n"},
+		{name: "confirmed", answer: "yes\n", wantReleased: true, wantOutput: "Release device \"354820091234567\" from fleet \"pilot\"? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] Released device \"354820091234567\" from fleet \"pilot\".\n"},
+		{name: "declined", answer: "n\n", wantOutput: "Release device \"354820091234567\" from fleet \"pilot\"? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] Nothing released.\n"},
+		{name: "a named device is named back, not its IMEI", answer: "n\n", devices: `[{"imei":"354820091234567","name":"rooftop","fleet_id":3,"last_seen_at":null}]`, wantOutput: "Release device \"rooftop\" from fleet \"pilot\"? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] Nothing released.\n"},
 		{name: "server refuses", answer: "y\n", refusal: "no such device", wantReleased: true, wantError: "no such device"},
 		{name: "device belongs to an inaccessible fleet", fleets: `[]`, wantError: "no such device, device list shows yours"},
 	}
@@ -357,14 +359,19 @@ func TestDeviceRelease(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			releasedPath := ""
 			fleets := test.fleets
+			devices := test.devices
 
 			if fleets == "" {
 				fleets = `[{"id":3,"name":"pilot","owner":true}]`
 			}
 
+			if devices == "" {
+				devices = `[{"imei":"354820091234567","name":null,"fleet_id":3,"last_seen_at":null}]`
+			}
+
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `[{"imei":"354820091234567","name":null,"fleet_id":3,"last_seen_at":null}]`)
+				fmt.Fprint(w, devices)
 			})
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprint(w, fleets)

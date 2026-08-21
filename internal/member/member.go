@@ -54,7 +54,7 @@ func Add(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Gave %s access.\n", email)
+	fmt.Fprintf(session.Out, "Gave %s access to fleet %d.\n", email, fleetId)
 
 	return nil
 }
@@ -156,7 +156,7 @@ func Remove(session api.Session, arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	fmt.Fprintf(session.Out, "Take away %s's access to %q? [y/N] ", email, name)
+	fmt.Fprintf(session.Out, "Take away %s's access to fleet %q? [y/N] ", email, name)
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
 
@@ -186,7 +186,7 @@ func Remove(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Removed access for %s.\n", email)
+	fmt.Fprintf(session.Out, "Removed %s's access to fleet %q.\n", email, name)
 
 	return nil
 }

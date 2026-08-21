@@ -115,6 +115,10 @@ func TestKeyCreate(t *testing.T) {
 			if !strings.Contains(printed, "you will not see it again") {
 				t.Errorf("the output %q does not warn that the key cannot be shown again", printed)
 			}
+
+			if !strings.Contains(printed, "Created fleet key 1.") {
+				t.Errorf("the output %q does not name the fleet key it created", printed)
+			}
 		})
 	}
 }
@@ -149,13 +153,13 @@ func TestKeyList(t *testing.T) {
 		{
 			name:      "no keys",
 			arguments: []string{},
-			wantShown: []string{"No keys yet. Create one with key create."},
+			wantShown: []string{"No fleet keys yet. Create one with key create."},
 			keys:      `[]`,
 		},
 		{
 			name:       "a fleet without keys",
 			arguments:  []string{"5"},
-			wantShown:  []string{"No keys in that fleet."},
+			wantShown:  []string{"No fleet keys on that fleet yet."},
 			wantHidden: []string{"ID  FLEET"},
 		},
 		{
@@ -253,7 +257,7 @@ func TestKeyRevoke(t *testing.T) {
 			arguments:   []string{"3"},
 			answer:      "y\n",
 			wantRevoked: "/keys/3",
-			wantShown:   "production",
+			wantShown:   "Revoked fleet key \"production\".",
 		},
 		{
 			name:      "declined by default",

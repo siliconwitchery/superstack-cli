@@ -149,7 +149,7 @@ func Rename(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Renamed the fleet to %q.\n", name)
+	fmt.Fprintf(session.Out, "Renamed fleet %d to %q.\n", fleetId, name)
 
 	return nil
 }
@@ -166,6 +166,37 @@ func Transfer(session api.Session, arguments []string) error {
 	}
 
 	email := arguments[1]
+
+	fleets, err := api.FetchFleets(session)
+
+	if err != nil {
+		return err
+	}
+
+	name := ""
+	found := false
+
+	for _, fleet := range fleets {
+		if fleet.Id == fleetId {
+			name = fleet.Name
+			found = true
+		}
+	}
+
+	if !found {
+		return errors.New("no such fleet")
+	}
+
+	fmt.Fprintf(session.Out, "Hand fleet %q to %s? They become the owner, and you lose access to the fleet, its devices and its credit. [y/N] ", name, email)
+
+	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+
+	answer = strings.ToLower(strings.TrimSpace(answer))
+
+	if answer != "y" && answer != "yes" {
+		fmt.Fprintln(session.Out, "Nothing transferred.")
+		return nil
+	}
 
 	body, err := json.Marshal(map[string]string{"email": email})
 
@@ -194,7 +225,7 @@ func Transfer(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Transferred the fleet to %s.\n", email)
+	fmt.Fprintf(session.Out, "Transferred fleet %q to %s.\n", name, email)
 
 	return nil
 }
@@ -256,14 +287,14 @@ func Delete(session api.Session, arguments []string) error {
 		}
 	}
 
-	consequence := "It erases them all, and claiming one again means pressing its pairing button in person."
+	consequence := "It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person."
 
 	if forfeitUnknown {
-		fmt.Fprintf(session.Out, "Delete %q, release its devices, and forfeit its remaining credit? %s [y/N] ", name, consequence)
+		fmt.Fprintf(session.Out, "Delete fleet %q, release its devices, and forfeit its remaining credit? %s [y/N] ", name, consequence)
 	} else if forfeited == "" {
-		fmt.Fprintf(session.Out, "Delete %q and release its devices? %s [y/N] ", name, consequence)
+		fmt.Fprintf(session.Out, "Delete fleet %q and release its devices? %s [y/N] ", name, consequence)
 	} else {
-		fmt.Fprintf(session.Out, "Delete %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
+		fmt.Fprintf(session.Out, "Delete fleet %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
 	}
 
 	answer, _ := bufio.NewReader(session.In).ReadString('\n')
@@ -294,7 +325,7 @@ func Delete(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Deleted %q.\n", name)
+	fmt.Fprintf(session.Out, "Deleted fleet %q.\n", name)
 
 	return nil
 }

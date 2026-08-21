@@ -171,7 +171,7 @@ func TestFleetRename(t *testing.T) {
 		wantOutput string
 		wantError  string
 	}{
-		{name: "renamed", wantOutput: "Renamed the fleet to \"pilot\".\n"},
+		{name: "renamed", wantOutput: "Renamed fleet 9 to \"pilot\".\n"},
 		{name: "server refusal", refusal: "no such fleet", wantError: "no such fleet"},
 	}
 
@@ -247,20 +247,58 @@ func TestFleetRenameArguments(t *testing.T) {
 
 func TestFleetTransfer(t *testing.T) {
 	tests := []struct {
-		name       string
-		refusal    string
-		wantOutput string
-		wantError  string
+		name            string
+		answer          string
+		fleets          string
+		refusal         string
+		wantTransferred bool
+		wantOutput      string
+		wantError       string
 	}{
-		{name: "transferred", wantOutput: "Transferred the fleet to successor@example.com.\n"},
-		{name: "server refusal", refusal: "the new owner has no account", wantError: "the new owner has no account"},
+		{
+			name:            "confirmed with y",
+			answer:          "y\n",
+			wantTransferred: true,
+			wantOutput:      "Hand fleet \"pilot\" to successor@example.com? They become the owner, and you lose access to the fleet, its devices and its credit. [y/N] Transferred fleet \"pilot\" to successor@example.com.\n",
+		},
+		{name: "confirmed with yes", answer: "YES\n", wantTransferred: true},
+		{
+			name:       "declined with n",
+			answer:     "n\n",
+			wantOutput: "Hand fleet \"pilot\" to successor@example.com? They become the owner, and you lose access to the fleet, its devices and its credit. [y/N] Nothing transferred.\n",
+		},
+		{name: "declined by default", answer: "\n"},
+		{name: "closed input", answer: ""},
+		{
+			name:            "the server refuses after the confirmation",
+			answer:          "y\n",
+			refusal:         "no one with that email address has logged in yet",
+			wantTransferred: true,
+			wantError:       "no one with that email address has logged in yet",
+		},
+		{
+			name:      "a fleet that is not yours",
+			answer:    "y\n",
+			fleets:    `[]`,
+			wantError: "no such fleet",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			transferredPath := ""
 			transferredTo := ""
+			fleets := test.fleets
+
+			if fleets == "" {
+				fleets = `[{"id":3,"name":"pilot","owner":true}]`
+			}
+
 			mux := http.NewServeMux()
+
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, fleets)
+			})
 
 			mux.HandleFunc("POST /fleets/{id}/owner", func(w http.ResponseWriter, r *http.Request) {
 				body := struct {
@@ -281,23 +319,35 @@ func TestFleetTransfer(t *testing.T) {
 
 			session, out := apitest.LoggedInSession(t, mux)
 
+			session.In = strings.NewReader(test.answer)
+
 			err := Transfer(session, []string{"3", "successor@example.com"})
+
+			printed := out.String()
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {
 					t.Fatalf("error = %v, want %q", err, test.wantError)
 				}
+
+				if strings.Contains(printed, "Transferred") {
+					t.Errorf("the output %q says the fleet was handed over although it was not", printed)
+				}
 			} else if err != nil {
 				t.Fatal(err)
 			}
 
-			if transferredPath != "/fleets/3/owner" || transferredTo != "successor@example.com" {
+			if test.wantOutput != "" && printed != test.wantOutput {
+				t.Errorf("output = %q, want %q", printed, test.wantOutput)
+			}
+
+			if test.wantTransferred && (transferredPath != "/fleets/3/owner" || transferredTo != "successor@example.com") {
 				t.Errorf("the server saw %q handed to %q, want %q handed to %q",
 					transferredPath, transferredTo, "/fleets/3/owner", "successor@example.com")
 			}
 
-			if out.String() != test.wantOutput {
-				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
+			if !test.wantTransferred && transferredPath != "" {
+				t.Errorf("the server saw %q handed over although the confirmation was declined", transferredPath)
 			}
 		})
 	}
@@ -397,6 +447,10 @@ func TestFleetDelete(t *testing.T) {
 				t.Errorf("the server saw %q deleted, want %q", deletedPath, "/fleets/3")
 			}
 
+			if test.wantDeleted && test.wantError == "" && !strings.Contains(printed, "Deleted fleet \"pilot\".") {
+				t.Errorf("the output %q does not name the fleet it deleted", printed)
+			}
+
 			if !test.wantDeleted && deletedPath != "" {
 				t.Errorf("the server saw %q deleted although the confirmation was declined", deletedPath)
 			}
@@ -414,18 +468,18 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 		{
 			name:       "remaining credit is stated",
 			balance:    `[{"fleet":3,"balance":"12.340000","currency":"eur"}]`,
-			wantOutput: "Delete \"pilot\", release its devices, and forfeit its remaining €12.34 of credit? It erases them all, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantOutput: "Delete fleet \"pilot\", release its devices, and forfeit its remaining €12.34 of credit? It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 		},
 		{
 			name:       "an empty balance stays quiet",
 			balance:    `[{"fleet":3,"balance":"0","currency":"eur"}]`,
-			wantOutput: "Delete \"pilot\" and release its devices? It erases them all, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantOutput: "Delete fleet \"pilot\" and release its devices? It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 			wantAbsent: "forfeit",
 		},
 		{
 			name:       "an unparseable balance warns without an amount",
 			balance:    `[{"fleet":3,"balance":"15,00","currency":"eur"}]`,
-			wantOutput: "Delete \"pilot\", release its devices, and forfeit its remaining credit? It erases them all, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantOutput: "Delete fleet \"pilot\", release its devices, and forfeit its remaining credit? It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 			wantAbsent: "€",
 		},
 	}
@@ -458,8 +512,8 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 				t.Errorf("output = %q, want %q", printed, test.wantOutput)
 			}
 
-			if !strings.Contains(printed, "It erases them all, and claiming one again means pressing its pairing button in person.") {
-				t.Errorf("the prompt %q does not say the devices are erased", printed)
+			if !strings.Contains(printed, "It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person.") {
+				t.Errorf("the prompt %q does not say what releasing the devices does to them", printed)
 			}
 
 			if test.wantAbsent != "" && strings.Contains(printed, test.wantAbsent) {
