@@ -12,26 +12,26 @@ import (
 	"strings"
 )
 
-func Request(session Session, method string, path string, reader io.Reader) (*http.Request, error) {
-	request, err := http.NewRequest(method, strings.TrimSuffix(session.Base, "/")+path, reader)
+func Request(invocation Invocation, method string, path string, reader io.Reader) (*http.Request, error) {
+	request, err := http.NewRequest(method, strings.TrimSuffix(invocation.Base, "/")+path, reader)
 
 	if err != nil {
 		return nil, err
 	}
 
-	request.Header.Set("User-Agent", "superstack/"+session.Version)
+	request.Header.Set("User-Agent", "superstack/"+invocation.Version)
 
 	return request, nil
 }
 
-func AuthenticatedRequest(session Session, method string, path string, reader io.Reader) (*http.Request, error) {
-	storedKeyPath, err := KeyPath()
+func AuthenticatedRequest(invocation Invocation, method string, path string, reader io.Reader) (*http.Request, error) {
+	loginKeyPath, err := LoginKeyPath()
 
 	if err != nil {
 		return nil, err
 	}
 
-	keyBytes, err := os.ReadFile(storedKeyPath)
+	loginKeyBytes, err := os.ReadFile(loginKeyPath)
 
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, errors.New("you are not logged in, run login first")
@@ -41,19 +41,19 @@ func AuthenticatedRequest(session Session, method string, path string, reader io
 		return nil, errors.New("the login stored on this computer could not be read")
 	}
 
-	key := strings.TrimSpace(string(keyBytes))
+	loginKey := strings.TrimSpace(string(loginKeyBytes))
 
-	if key == "" {
+	if loginKey == "" {
 		return nil, errors.New("you are not logged in, run login first")
 	}
 
-	request, err := Request(session, method, path, reader)
+	request, err := Request(invocation, method, path, reader)
 
 	if err != nil {
 		return nil, err
 	}
 
-	request.Header.Set("Authorization", "Bearer "+key)
+	request.Header.Set("Authorization", "Bearer "+loginKey)
 
 	return request, nil
 }
@@ -81,7 +81,7 @@ func Decode(response *http.Response, value any) error {
 	return nil
 }
 
-func KeyPath() (string, error) {
+func LoginKeyPath() (string, error) {
 	if runtime.GOOS == "linux" {
 		stateHome := os.Getenv("XDG_STATE_HOME")
 

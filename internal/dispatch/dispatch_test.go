@@ -90,11 +90,11 @@ func TestDispatchTakesTheServerFlag(t *testing.T) {
 			seenRest := []string{}
 			seenBase := ""
 
-			record := func(name string) func(api.Session, []string) error {
-				return func(session api.Session, arguments []string) error {
+			record := func(name string) func(api.Invocation, []string) error {
+				return func(invocation api.Invocation, arguments []string) error {
 					ranCommand = name
 					seenRest = arguments
-					seenBase = session.Base
+					seenBase = invocation.Base
 
 					return nil
 				}
@@ -134,7 +134,7 @@ func TestDispatchTakesTheServerFlag(t *testing.T) {
 			}
 
 			if seenBase != test.wantBase {
-				t.Errorf("the session base is %q, want %q", seenBase, test.wantBase)
+				t.Errorf("the invocation base is %q, want %q", seenBase, test.wantBase)
 			}
 		})
 	}
@@ -144,12 +144,12 @@ func TestResolve(t *testing.T) {
 	sections := []Section{{Commands: []Command{
 		{Name: "login"},
 		{Name: "device list"},
-		{Name: "device claim"},
+		{Name: "device pair"},
 		{Name: "fleet create"},
 		{Name: "member add"},
-		{Name: "key create"},
+		{Name: "fleet key create"},
 		{Name: "account balance"},
-		{Name: "account topup"},
+		{Name: "account top-up"},
 		{Name: "upload"},
 	}}}
 
@@ -161,17 +161,17 @@ func TestResolve(t *testing.T) {
 	}{
 		{arguments: []string{"login"}, name: "login", rest: []string{}, found: true},
 		{arguments: []string{"device", "list"}, name: "device list", rest: []string{}, found: true},
-		{arguments: []string{"device", "claim", "354820091234567", "sensor-01"}, name: "device claim", rest: []string{"354820091234567", "sensor-01"}, found: true},
+		{arguments: []string{"device", "pair", "354820091234567", "sensor-01"}, name: "device pair", rest: []string{"354820091234567", "sensor-01"}, found: true},
 		{arguments: []string{"fleet", "create", "thermostats"}, name: "fleet create", rest: []string{"thermostats"}, found: true},
 		{arguments: []string{"member", "add", "member@example.com"}, name: "member add", rest: []string{"member@example.com"}, found: true},
-		{arguments: []string{"key", "create", "42", "production"}, name: "key create", rest: []string{"42", "production"}, found: true},
+		{arguments: []string{"fleet", "key", "create", "42", "production"}, name: "fleet key create", rest: []string{"42", "production"}, found: true},
 		{arguments: []string{"account", "balance"}, name: "account balance", rest: []string{}, found: true},
-		{arguments: []string{"account", "topup", "42"}, name: "account topup", rest: []string{"42"}, found: true},
+		{arguments: []string{"account", "top-up", "42"}, name: "account top-up", rest: []string{"42"}, found: true},
 		{arguments: []string{"upload", "./main.lua", "--device", "sensor-01"}, name: "upload", rest: []string{"./main.lua", "--device", "sensor-01"}, found: true},
 		{arguments: []string{"fleet"}, found: false},
 		{arguments: []string{"member"}, found: false},
 		{arguments: []string{"device"}, found: false},
-		{arguments: []string{"key"}, found: false},
+		{arguments: []string{"fleet", "key"}, found: false},
 		{arguments: []string{"account"}, found: false},
 		{arguments: []string{"deploy"}, found: false},
 		{arguments: []string{}, found: false},
@@ -202,8 +202,8 @@ func TestResolve(t *testing.T) {
 func TestDispatch(t *testing.T) {
 	sections := []Section{
 		{Title: "Things", Commands: []Command{
-			{Name: "thing list", Arguments: "<id>", Summary: "List a thing", Run: func(session api.Session, arguments []string) error {
-				fmt.Fprintln(session.Out, "Listed.")
+			{Name: "thing list", Arguments: "<id>", Summary: "List a thing", Run: func(invocation api.Invocation, arguments []string) error {
+				fmt.Fprintln(invocation.Out, "Listed.")
 				return nil
 			}},
 			{Name: "thing pending", Summary: "Wait for a thing"},
@@ -268,9 +268,9 @@ func TestHelpListsEveryCommand(t *testing.T) {
 		{Title: "Account", Commands: []Command{{Name: "account delete", Summary: "Delete the account"}}},
 	}
 	out := &bytes.Buffer{}
-	session := api.NewSession(api.DefaultBase, "1.2.3", strings.NewReader(""), out)
+	invocation := api.NewInvocation(api.DefaultBase, "1.2.3", strings.NewReader(""), out)
 
-	printHelp(session, sections)
+	printHelp(invocation, sections)
 
 	for _, section := range sections {
 		if !strings.Contains(out.String(), section.Title) {

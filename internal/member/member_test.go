@@ -18,7 +18,7 @@ func TestMemberAdd(t *testing.T) {
 		wantOutput string
 		wantError  string
 	}{
-		{name: "added", wantOutput: "Gave member@example.com access to fleet 3.\n"},
+		{name: "added", wantOutput: "Added member member@example.com to fleet 3.\n"},
 		{name: "server refusal", refusal: "no such account", wantError: "no such account"},
 	}
 
@@ -45,9 +45,9 @@ func TestMemberAdd(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Add(session, []string{"member@example.com", "3"})
+			err := Add(invocation, []string{"member@example.com", "3"})
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {
@@ -82,7 +82,7 @@ func TestMemberAddArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Add(api.Session{}, test.arguments)
+		err := Add(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
@@ -177,9 +177,9 @@ func TestMemberList(t *testing.T) {
 				fmt.Fprint(w, test.people)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := List(session, test.arguments)
+			err := List(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -225,8 +225,8 @@ func TestMemberRemove(t *testing.T) {
 	}{
 		{name: "a plain address", email: "member@example.com", answer: "y\n", wantRemoved: true},
 		{name: "an address with a hash", email: "a#b@example.com", answer: "yes\n", wantRemoved: true},
-		{name: "the question names the fleet", email: "member@example.com", answer: "n\n", wantShown: `Take away member@example.com's access to fleet "pilot"?`},
-		{name: "the success line names the fleet", email: "member@example.com", answer: "y\n", wantRemoved: true, wantShown: `Removed member@example.com's access to fleet "pilot".`},
+		{name: "the question names the fleet", email: "member@example.com", answer: "n\n", wantShown: `Remove member member@example.com from fleet "pilot"?`},
+		{name: "the success line names the fleet", email: "member@example.com", answer: "y\n", wantRemoved: true, wantShown: `Removed member member@example.com from fleet "pilot".`},
 		{name: "declined by default", email: "member@example.com", answer: "\n", wantShown: "Nothing removed"},
 		{name: "declined with n", email: "member@example.com", answer: "n\n", wantShown: "Nothing removed"},
 		{name: "closed input", email: "member@example.com", wantShown: "Nothing removed"},
@@ -263,11 +263,11 @@ func TestMemberRemove(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			session.In = strings.NewReader(test.answer)
+			invocation.In = strings.NewReader(test.answer)
 
-			err := Remove(session, []string{test.email, "3"})
+			err := Remove(invocation, []string{test.email, "3"})
 
 			printed := out.String()
 
@@ -308,7 +308,7 @@ func TestMemberRemoveArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Remove(api.Session{}, test.arguments)
+		err := Remove(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

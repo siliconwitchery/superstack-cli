@@ -99,7 +99,7 @@ func TestNoPartImportsAnother(t *testing.T) {
 		"account":     {"api"},
 		"device":      {"api"},
 		"fleet":       {"api"},
-		"key":         {"api"},
+		"fleetkey":    {"api"},
 		"login":       {"api"},
 		"member":      {"api"},
 	}
@@ -160,10 +160,10 @@ func TestNoPartImportsAnother(t *testing.T) {
 
 func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 	wired := []string{
-		"account balance", "account delete", "account topup",
-		"device claim", "device list", "device release", "device rename",
-		"fleet create", "fleet delete", "fleet list", "fleet rename", "fleet transfer",
-		"key create", "key list", "key revoke",
+		"account balance", "account delete", "account top-up",
+		"device list", "device pair", "device rename", "device unpair",
+		"fleet create", "fleet delete", "fleet key create", "fleet key list",
+		"fleet key revoke", "fleet list", "fleet rename", "fleet transfer",
 		"login", "logout",
 		"member add", "member list", "member remove",
 	}

@@ -17,23 +17,23 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func Login(session api.Session, arguments []string) error {
+func Login(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 || (arguments[0] != "github" && arguments[0] != "gitlab") {
 		return errors.New("login takes a provider: github or gitlab")
 	}
 
 	provider := arguments[0]
 
-	providersRequest, err := api.Request(session, http.MethodGet, "/login", nil)
+	providersRequest, err := api.Request(invocation, http.MethodGet, "/login", nil)
 
 	if err != nil {
 		return err
 	}
 
-	providersResponse, err := session.Client.Do(providersRequest)
+	providersResponse, err := invocation.Client.Do(providersRequest)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer providersResponse.Body.Close()
@@ -58,14 +58,14 @@ func Login(session api.Session, arguments []string) error {
 	switch provider {
 	case "github":
 		clientId = providers.GithubClientId
-		deviceCodeUrl = session.GithubBase + "/login/device/code"
-		pollUrl = session.GithubBase + "/login/oauth/access_token"
+		deviceCodeUrl = invocation.GithubBase + "/login/device/code"
+		pollUrl = invocation.GithubBase + "/login/oauth/access_token"
 		scope = "user:email"
 
 	case "gitlab":
 		clientId = providers.GitlabClientId
-		deviceCodeUrl = session.GitlabBase + "/oauth/authorize_device"
-		pollUrl = session.GitlabBase + "/oauth/token"
+		deviceCodeUrl = invocation.GitlabBase + "/oauth/authorize_device"
+		pollUrl = invocation.GitlabBase + "/oauth/token"
 		scope = "read_user"
 	}
 
@@ -93,7 +93,7 @@ func Login(session api.Session, arguments []string) error {
 	codeResponse, err := oauthClient.Do(codeRequest)
 
 	if err != nil {
-		return fmt.Errorf("%s could not be reached, check your connection", provider)
+		return fmt.Errorf("%s could not be reached, check your internet access", provider)
 	}
 
 	defer codeResponse.Body.Close()
@@ -124,15 +124,15 @@ func Login(session api.Session, arguments []string) error {
 		enterAt = code.VerificationUriComplete
 	}
 
-	fmt.Fprintf(session.Out, "Copy your one-time code: %s\n", api.Printable(code.UserCode))
-	fmt.Fprintf(session.Out, "Then enter it at %s\n", api.Printable(enterAt))
-	fmt.Fprintln(session.Out, "Press enter to open the browser.")
+	fmt.Fprintf(invocation.Out, "Copy your one-time code: %s\n", api.Printable(code.UserCode))
+	fmt.Fprintf(invocation.Out, "Then enter it at %s\n", api.Printable(enterAt))
+	fmt.Fprintln(invocation.Out, "Press enter to open the browser.")
 
 	go func() {
-		_, err := bufio.NewReader(session.In).ReadString('\n')
+		_, err := bufio.NewReader(invocation.In).ReadString('\n')
 
 		if err == nil {
-			session.OpenBrowser(enterAt)
+			invocation.OpenBrowser(enterAt)
 		}
 	}()
 
@@ -144,9 +144,9 @@ func Login(session api.Session, arguments []string) error {
 		interval = 5 // RFC 8628 section 3.2: the default when a provider omits it
 	}
 
-	accessToken := ""
+	providerAccessToken := ""
 
-	for accessToken == "" {
+	for providerAccessToken == "" {
 		time.Sleep(time.Duration(interval) * time.Second)
 
 		if time.Now().After(deadline) {
@@ -172,12 +172,12 @@ func Login(session api.Session, arguments []string) error {
 		pollResponse, err := oauthClient.Do(pollRequest)
 
 		if err != nil {
-			return fmt.Errorf("%s could not be reached, check your connection", provider)
+			return fmt.Errorf("%s could not be reached, check your internet access", provider)
 		}
 
 		poll := struct {
-			AccessToken string `json:"access_token"`
-			Error       string `json:"error"`
+			ProviderAccessToken string `json:"access_token"`
+			Error               string `json:"error"`
 		}{}
 
 		err = api.Decode(pollResponse, &poll)
@@ -190,11 +190,11 @@ func Login(session api.Session, arguments []string) error {
 
 		switch poll.Error {
 		case "":
-			if poll.AccessToken == "" {
+			if poll.ProviderAccessToken == "" {
 				return fmt.Errorf("the login did not complete on %s, run login again", provider)
 			}
 
-			accessToken = poll.AccessToken
+			providerAccessToken = poll.ProviderAccessToken
 
 		case "authorization_pending":
 
@@ -214,14 +214,14 @@ func Login(session api.Session, arguments []string) error {
 
 	loginBody, err := json.Marshal(map[string]string{
 		"provider":     provider,
-		"access_token": accessToken,
+		"access_token": providerAccessToken,
 	})
 
 	if err != nil {
 		return err
 	}
 
-	loginRequest, err := api.Request(session, http.MethodPost, "/login", bytes.NewReader(loginBody))
+	loginRequest, err := api.Request(invocation, http.MethodPost, "/login", bytes.NewReader(loginBody))
 
 	if err != nil {
 		return err
@@ -229,10 +229,10 @@ func Login(session api.Session, arguments []string) error {
 
 	loginRequest.Header.Set("Content-Type", "application/json")
 
-	loginResponse, err := session.Client.Do(loginRequest)
+	loginResponse, err := invocation.Client.Do(loginRequest)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer loginResponse.Body.Close()
@@ -242,8 +242,8 @@ func Login(session api.Session, arguments []string) error {
 	}
 
 	login := struct {
-		Key   string `json:"key"`
-		Email string `json:"email"`
+		LoginKey string `json:"key"`
+		Email    string `json:"email"`
 	}{}
 
 	err = api.Decode(loginResponse, &login)
@@ -252,11 +252,11 @@ func Login(session api.Session, arguments []string) error {
 		return err
 	}
 
-	if login.Key == "" {
+	if login.LoginKey == "" {
 		return errors.New("the login did not complete")
 	}
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		return err
@@ -270,7 +270,7 @@ func Login(session api.Session, arguments []string) error {
 		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
 	}
 
-	temporary, err := os.CreateTemp(directory, "key")
+	temporary, err := os.CreateTemp(directory, "login-key")
 
 	if err != nil {
 		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
@@ -278,7 +278,7 @@ func Login(session api.Session, arguments []string) error {
 
 	defer os.Remove(temporary.Name())
 
-	_, err = temporary.WriteString(login.Key + "\n")
+	_, err = temporary.WriteString(login.LoginKey + "\n")
 
 	if err != nil {
 		temporary.Close()
@@ -297,26 +297,26 @@ func Login(session api.Session, arguments []string) error {
 		return fmt.Errorf("the login could not be saved to %s, so you are not logged in", path)
 	}
 
-	fmt.Fprintf(session.Out, "Logged in as %s.\n", api.Printable(login.Email))
+	fmt.Fprintf(invocation.Out, "Logged in as %s.\n", api.Printable(login.Email))
 
 	return nil
 }
 
-func Logout(session api.Session, arguments []string) error {
+func Logout(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 0 {
 		return errors.New("logout takes no arguments")
 	}
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		return err
 	}
 
-	keyBytes, err := os.ReadFile(path)
+	loginKeyBytes, err := os.ReadFile(path)
 
 	if errors.Is(err, fs.ErrNotExist) {
-		fmt.Fprintln(session.Out, "Not logged in.")
+		fmt.Fprintln(invocation.Out, "Not logged in.")
 		return nil
 	}
 
@@ -324,22 +324,22 @@ func Logout(session api.Session, arguments []string) error {
 		return errors.New("the login stored on this computer could not be read")
 	}
 
-	key := strings.TrimSpace(string(keyBytes))
+	loginKey := strings.TrimSpace(string(loginKeyBytes))
 
-	if key == "" {
-		fmt.Fprintln(session.Out, "Not logged in.")
+	if loginKey == "" {
+		fmt.Fprintln(invocation.Out, "Not logged in.")
 		return nil
 	}
 
-	revokeRequest, err := api.Request(session, http.MethodPost, "/logout", nil)
+	revokeRequest, err := api.Request(invocation, http.MethodPost, "/logout", nil)
 
 	if err != nil {
 		return err
 	}
 
-	revokeRequest.Header.Set("Authorization", "Bearer "+key)
+	revokeRequest.Header.Set("Authorization", "Bearer "+loginKey)
 
-	revokeResponse, err := session.Client.Do(revokeRequest)
+	revokeResponse, err := invocation.Client.Do(revokeRequest)
 
 	if err != nil {
 		return errors.New("you are still logged in, the server could not be reached")
@@ -351,7 +351,7 @@ func Logout(session api.Session, arguments []string) error {
 		return fmt.Errorf("you are still logged in: %s", api.ServerError(revokeResponse))
 	}
 
-	fmt.Fprintln(session.Out, "Logged out.")
+	fmt.Fprintln(invocation.Out, "Logged out.")
 
 	err = os.Remove(path)
 

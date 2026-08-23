@@ -43,9 +43,9 @@ func TestFleetCreate(t *testing.T) {
 				fmt.Fprintf(w, `{"id": 5, "name": %q}`, body.Name)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Create(session, []string{"field trial"})
+			err := Create(invocation, []string{"field trial"})
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {
@@ -77,7 +77,7 @@ func TestFleetCreateTakesOneName(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Create(api.Session{}, test.arguments)
+		err := Create(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), "takes one name") {
 			t.Errorf("%s: error = %v, want the one-name hint", test.name, err)
@@ -144,9 +144,9 @@ func TestFleetList(t *testing.T) {
 				fmt.Fprint(w, test.fleets)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := List(session, test.arguments)
+			err := List(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -215,9 +215,9 @@ func TestFleetRename(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Rename(session, []string{"9", " pilot "})
+			err := Rename(invocation, []string{"9", " pilot "})
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {
@@ -254,7 +254,7 @@ func TestFleetRenameArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Rename(api.Session{}, test.arguments)
+		err := Rename(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
@@ -334,11 +334,11 @@ func TestFleetTransfer(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			session.In = strings.NewReader(test.answer)
+			invocation.In = strings.NewReader(test.answer)
 
-			err := Transfer(session, []string{"3", "successor@example.com"})
+			err := Transfer(invocation, []string{"3", "successor@example.com"})
 
 			printed := out.String()
 
@@ -383,7 +383,7 @@ func TestFleetTransferArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Transfer(api.Session{}, test.arguments)
+		err := Transfer(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
@@ -438,11 +438,11 @@ func TestFleetDelete(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			session.In = strings.NewReader(test.answer)
+			invocation.In = strings.NewReader(test.answer)
 
-			err := Delete(session, []string{"3"})
+			err := Delete(invocation, []string{"3"})
 
 			printed := out.String()
 
@@ -485,18 +485,18 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 		{
 			name:       "remaining credit is stated",
 			balance:    `[{"fleet":3,"balance":"12.340000","currency":"eur"}]`,
-			wantOutput: "Delete fleet \"pilot\", release its devices, and forfeit its remaining €12.34 of credit? It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantOutput: "Delete fleet \"pilot\", unpair its devices, and forfeit its remaining €12.34 of credit? It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 		},
 		{
 			name:       "an empty balance stays quiet",
 			balance:    `[{"fleet":3,"balance":"0","currency":"eur"}]`,
-			wantOutput: "Delete fleet \"pilot\" and release its devices? It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantOutput: "Delete fleet \"pilot\" and unpair its devices? It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 			wantAbsent: "forfeit",
 		},
 		{
 			name:       "an unparseable balance warns without an amount",
 			balance:    `[{"fleet":3,"balance":"15,00","currency":"eur"}]`,
-			wantOutput: "Delete fleet \"pilot\", release its devices, and forfeit its remaining credit? It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			wantOutput: "Delete fleet \"pilot\", unpair its devices, and forfeit its remaining credit? It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
 			wantAbsent: "€",
 		},
 	}
@@ -513,11 +513,11 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 				fmt.Fprint(w, test.balance)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			session.In = strings.NewReader("n\n")
+			invocation.In = strings.NewReader("n\n")
 
-			err := Delete(session, []string{"3"})
+			err := Delete(invocation, []string{"3"})
 
 			printed := out.String()
 
@@ -529,8 +529,8 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 				t.Errorf("output = %q, want %q", printed, test.wantOutput)
 			}
 
-			if !strings.Contains(printed, "It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person.") {
-				t.Errorf("the prompt %q does not say what releasing the devices does to them", printed)
+			if !strings.Contains(printed, "It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person.") {
+				t.Errorf("the prompt %q does not say what unpairing the devices does to them", printed)
 			}
 
 			if test.wantAbsent != "" && strings.Contains(printed, test.wantAbsent) {
@@ -559,11 +559,11 @@ func TestFleetDeleteRefusesWhenTheBalanceIsUnknown(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	session, _ := apitest.LoggedInSession(t, mux)
+	invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-	session.In = strings.NewReader("y\n")
+	invocation.In = strings.NewReader("y\n")
 
-	err := Delete(session, []string{"3"})
+	err := Delete(invocation, []string{"3"})
 
 	if err == nil || !strings.Contains(err.Error(), "could not read the balances") {
 		t.Fatalf("error = %v, want the server's balance refusal", err)
@@ -581,9 +581,9 @@ func TestFleetDeleteUnknownFleet(t *testing.T) {
 		fmt.Fprint(w, `[]`)
 	})
 
-	session, _ := apitest.LoggedInSession(t, mux)
+	invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-	err := Delete(session, []string{"9"})
+	err := Delete(invocation, []string{"9"})
 
 	if err == nil || !strings.Contains(err.Error(), "no such fleet") {
 		t.Fatalf("error = %v, want no such fleet", err)
@@ -602,7 +602,7 @@ func TestFleetDeleteArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Delete(api.Session{}, test.arguments)
+		err := Delete(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)

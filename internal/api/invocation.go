@@ -11,7 +11,7 @@ import (
 
 const DefaultBase = "https://supernext.siliconwitchery.com"
 
-type Session struct {
+type Invocation struct {
 	Base        string
 	GithubBase  string
 	GitlabBase  string
@@ -19,11 +19,11 @@ type Session struct {
 	Client      *http.Client
 	In          io.Reader
 	Out         io.Writer
-	OpenBrowser func(link string)
+	OpenBrowser func(address string)
 }
 
-func NewSession(base string, version string, in io.Reader, out io.Writer) Session {
-	return Session{
+func NewInvocation(base string, version string, in io.Reader, out io.Writer) Invocation {
+	return Invocation{
 		Base:        base,
 		GithubBase:  "https://github.com",
 		GitlabBase:  "https://gitlab.com",
@@ -35,14 +35,14 @@ func NewSession(base string, version string, in io.Reader, out io.Writer) Sessio
 	}
 }
 
-func openBrowser(link string) {
-	address, err := url.Parse(link)
+func openBrowser(address string) {
+	parsed, err := url.Parse(address)
 
 	if err != nil {
 		return
 	}
 
-	if address.Scheme != "http" && address.Scheme != "https" {
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return
 	}
 
@@ -50,13 +50,13 @@ func openBrowser(link string) {
 
 	switch runtime.GOOS {
 	case "darwin":
-		command = exec.Command("open", link)
+		command = exec.Command("open", address)
 
 	case "windows":
-		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", link)
+		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", address)
 
 	default:
-		command = exec.Command("xdg-open", link)
+		command = exec.Command("xdg-open", address)
 	}
 
 	_ = command.Start()

@@ -13,17 +13,17 @@ type BalanceEntry struct {
 	Currency string `json:"currency"`
 }
 
-func FetchBalances(session Session) ([]BalanceEntry, error) {
-	request, err := AuthenticatedRequest(session, http.MethodGet, "/balance", nil)
+func FetchBalances(invocation Invocation) ([]BalanceEntry, error) {
+	request, err := AuthenticatedRequest(invocation, http.MethodGet, "/balance", nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return nil, errors.New("the server could not be reached, check your connection")
+		return nil, errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()

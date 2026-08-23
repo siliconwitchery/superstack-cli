@@ -14,7 +14,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func Add(session api.Session, arguments []string) error {
+func Add(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 || arguments[0] == "" {
 		return errors.New("member add takes an email address and a fleet id")
 	}
@@ -33,7 +33,7 @@ func Add(session api.Session, arguments []string) error {
 		return err
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPost,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members", bytes.NewReader(body))
 
 	if err != nil {
@@ -42,10 +42,10 @@ func Add(session api.Session, arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -54,12 +54,12 @@ func Add(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Gave %s access to fleet %d.\n", email, fleetId)
+	fmt.Fprintf(invocation.Out, "Added member %s to fleet %d.\n", email, fleetId)
 
 	return nil
 }
 
-func List(session api.Session, arguments []string) error {
+func List(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) != 1 {
@@ -72,17 +72,17 @@ func List(session api.Session, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodGet,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodGet,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members", nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -103,7 +103,7 @@ func List(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		err = json.NewEncoder(session.Out).Encode(people)
+		err = json.NewEncoder(invocation.Out).Encode(people)
 
 		return err
 	}
@@ -117,18 +117,18 @@ func List(session api.Session, arguments []string) error {
 		emailWidth = max(emailWidth, len(members[index]))
 	}
 
-	fmt.Fprintf(session.Out, "%-*s  %s\n", emailWidth, "EMAIL", "ROLE")
+	fmt.Fprintf(invocation.Out, "%-*s  %s\n", emailWidth, "EMAIL", "ROLE")
 
-	fmt.Fprintf(session.Out, "%-*s  owner\n", emailWidth, owner)
+	fmt.Fprintf(invocation.Out, "%-*s  owner\n", emailWidth, owner)
 
 	for _, email := range members {
-		fmt.Fprintf(session.Out, "%-*s  member\n", emailWidth, email)
+		fmt.Fprintf(invocation.Out, "%-*s  member\n", emailWidth, email)
 	}
 
 	return nil
 }
 
-func Remove(session api.Session, arguments []string) error {
+func Remove(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 || arguments[0] == "" {
 		return errors.New("member remove takes an email address and a fleet id")
 	}
@@ -141,7 +141,7 @@ func Remove(session api.Session, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -161,28 +161,28 @@ func Remove(session api.Session, arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	fmt.Fprintf(session.Out, "Take away %s's access to fleet %q? [y/N] ", email, name)
+	fmt.Fprintf(invocation.Out, "Remove member %s from fleet %q? [y/N] ", email, name)
 
-	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Fprintln(session.Out, "Nothing removed.")
+		fmt.Fprintln(invocation.Out, "Nothing removed.")
 		return nil
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodDelete,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodDelete,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/members/"+url.PathEscape(email), nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -191,7 +191,7 @@ func Remove(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Removed %s's access to fleet %q.\n", email, name)
+	fmt.Fprintf(invocation.Out, "Removed member %s from fleet %q.\n", email, name)
 
 	return nil
 }

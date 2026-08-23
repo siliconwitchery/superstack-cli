@@ -8,7 +8,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/device"
 	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
 	"github.com/siliconwitchery/superstack-cli/internal/fleet"
-	"github.com/siliconwitchery/superstack-cli/internal/key"
+	"github.com/siliconwitchery/superstack-cli/internal/fleetkey"
 	"github.com/siliconwitchery/superstack-cli/internal/login"
 	"github.com/siliconwitchery/superstack-cli/internal/member"
 )
@@ -30,16 +30,16 @@ var sections = []dispatch.Section{
 			{Name: "fleet list", Arguments: "[--json]", Summary: "List the fleets you can reach", Run: fleet.List},
 			{Name: "fleet rename", Arguments: "<fleet_id> <new_name>", Summary: "Rename a fleet", Run: fleet.Rename},
 			{Name: "fleet transfer", Arguments: "<fleet_id> <email>", Summary: "Hand a fleet to a new owner", Run: fleet.Transfer},
-			{Name: "fleet delete", Arguments: "<fleet_id>", Summary: "Delete a fleet and release its devices", Run: fleet.Delete},
+			{Name: "fleet delete", Arguments: "<fleet_id>", Summary: "Delete a fleet and unpair its devices", Run: fleet.Delete},
 		},
 	},
 	{
 		Title: "Devices",
 		Commands: []dispatch.Command{
-			{Name: "device claim", Arguments: "<imei> <fleet_id> [name]", Summary: "Claim a device into a fleet, then press its pairing button", Run: device.Claim},
-			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices, their state, and when they were last seen", Run: device.List},
+			{Name: "device pair", Arguments: "<imei> <fleet_id> [name]", Summary: "Pair a device with a fleet using its pairing button", Run: device.Pair},
+			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices, their run state, and when they were last seen", Run: device.List},
 			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: device.Rename},
-			{Name: "device release", Arguments: "<imei>", Summary: "Release a device from its fleet, wiping its files and restarting its code", Run: device.Release},
+			{Name: "device unpair", Arguments: "<imei>", Summary: "Unpair a device, wipe its user files, and restart Lua", Run: device.Unpair},
 			{Name: "device start", Arguments: "<imei>", Summary: "Start the code on a device"},
 			{Name: "device stop", Arguments: "<imei>", Summary: "Stop the code on a device"},
 			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on a device"},
@@ -62,24 +62,24 @@ var sections = []dispatch.Section{
 	{
 		Title: "People",
 		Commands: []dispatch.Command{
-			{Name: "member add", Arguments: "<email> <fleet_id>", Summary: "Give someone access to a fleet", Run: member.Add},
-			{Name: "member list", Arguments: "<fleet_id> [--json]", Summary: "List the people who can reach a fleet", Run: member.List},
-			{Name: "member remove", Arguments: "<email> <fleet_id>", Summary: "Take away someone's access", Run: member.Remove},
+			{Name: "member add", Arguments: "<email> <fleet_id>", Summary: "Add a member to a fleet", Run: member.Add},
+			{Name: "member list", Arguments: "<fleet_id> [--json]", Summary: "List a fleet's owner and members", Run: member.List},
+			{Name: "member remove", Arguments: "<email> <fleet_id>", Summary: "Remove a member from a fleet", Run: member.Remove},
 		},
 	},
 	{
 		Title: "Fleet keys",
 		Commands: []dispatch.Command{
-			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a fleet key for sending data to the fleet", Run: key.Create},
-			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the fleet keys that can reach your fleets", Run: key.List},
-			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a fleet key from reaching its fleet", Run: key.Revoke},
+			{Name: "fleet key create", Arguments: "<fleet_id> <label>", Summary: "Create a fleet key for sending data to the fleet", Run: fleetkey.Create},
+			{Name: "fleet key list", Arguments: "[fleet_id] [--json]", Summary: "List the fleet keys that can reach your fleets", Run: fleetkey.List},
+			{Name: "fleet key revoke", Arguments: "<fleet_key_id>", Summary: "Stop a fleet key from reaching its fleet", Run: fleetkey.Revoke},
 		},
 	},
 	{
 		Title: "Account",
 		Commands: []dispatch.Command{
 			{Name: "account balance", Arguments: "[fleet_id] [--json]", Summary: "Show the credit left on your fleets", Run: account.Balance},
-			{Name: "account topup", Arguments: "<fleet_id>", Summary: "Add credit to a fleet", Run: account.Topup},
+			{Name: "account top-up", Arguments: "<fleet_id>", Summary: "Add credit to a fleet", Run: account.TopUp},
 			{Name: "account delete", Summary: "Delete your account entirely", Run: account.Delete},
 		},
 	},

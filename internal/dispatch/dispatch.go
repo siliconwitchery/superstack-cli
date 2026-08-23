@@ -13,7 +13,7 @@ type Command struct {
 	Name      string
 	Arguments string
 	Summary   string
-	Run       func(session api.Session, arguments []string) error
+	Run       func(invocation api.Invocation, arguments []string) error
 }
 
 type Section struct {
@@ -58,7 +58,7 @@ func resolve(sections []Section, arguments []string) (Command, []string, bool) {
 	return longest, arguments[longestWords:], true
 }
 
-func printHelp(session api.Session, sections []Section) {
+func printHelp(invocation api.Invocation, sections []Section) {
 	widest := 0
 
 	for _, section := range sections {
@@ -75,11 +75,11 @@ func printHelp(session api.Session, sections []Section) {
 		}
 	}
 
-	fmt.Fprintf(session.Out, "superstack %s\n\n", session.Version)
-	fmt.Fprint(session.Out, "Usage: superstack <command> [arguments]\n")
+	fmt.Fprintf(invocation.Out, "superstack %s\n\n", invocation.Version)
+	fmt.Fprint(invocation.Out, "Usage: superstack <command> [arguments]\n")
 
 	for _, section := range sections {
-		fmt.Fprintf(session.Out, "\n%s\n", section.Title)
+		fmt.Fprintf(invocation.Out, "\n%s\n", section.Title)
 
 		for _, entry := range section.Commands {
 			signature := entry.Name
@@ -88,7 +88,7 @@ func printHelp(session api.Session, sections []Section) {
 				signature += " " + entry.Arguments
 			}
 
-			fmt.Fprintf(session.Out, "  %-*s  %s\n", widest, signature, entry.Summary)
+			fmt.Fprintf(invocation.Out, "  %-*s  %s\n", widest, signature, entry.Summary)
 		}
 	}
 }
@@ -124,20 +124,20 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 
 	arguments = remaining
 
-	session := api.NewSession(base, version, in, out)
+	invocation := api.NewInvocation(base, version, in, out)
 
 	if len(arguments) == 0 {
-		printHelp(session, sections)
+		printHelp(invocation, sections)
 		return nil
 	}
 
 	switch arguments[0] {
 	case "-h", "--help":
-		printHelp(session, sections)
+		printHelp(invocation, sections)
 		return nil
 
 	case "-v", "--version":
-		fmt.Fprintln(session.Out, session.Version)
+		fmt.Fprintln(invocation.Out, invocation.Version)
 		return nil
 	}
 
@@ -149,12 +149,12 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 
 	switch entry.Name {
 	case "version":
-		fmt.Fprintln(session.Out, session.Version)
+		fmt.Fprintln(invocation.Out, invocation.Version)
 		return nil
 
 	case "help":
 		if len(rest) == 0 {
-			printHelp(session, sections)
+			printHelp(invocation, sections)
 			return nil
 		}
 
@@ -170,7 +170,7 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 			signature += " " + topic.Arguments
 		}
 
-		fmt.Fprintf(session.Out, "superstack %s\n\n  %s\n", signature, topic.Summary)
+		fmt.Fprintf(invocation.Out, "superstack %s\n\n  %s\n", signature, topic.Summary)
 		return nil
 	}
 
@@ -178,7 +178,7 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 		return fmt.Errorf("%s is not available yet", entry.Name)
 	}
 
-	err := entry.Run(session, rest)
+	err := entry.Run(invocation, rest)
 
 	return err
 }

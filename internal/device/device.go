@@ -14,9 +14,9 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func Claim(session api.Session, arguments []string) error {
+func Pair(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 && len(arguments) != 3 {
-		return errors.New("device claim takes an IMEI, a fleet id, and an optional name")
+		return errors.New("device pair takes an IMEI, a fleet id, and an optional name")
 	}
 
 	imei := arguments[0]
@@ -31,7 +31,7 @@ func Claim(session api.Session, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -49,7 +49,7 @@ func Claim(session api.Session, arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	fmt.Fprintln(session.Out, "Press the pairing button on the device to finish claiming it.")
+	fmt.Fprintln(invocation.Out, "Press the pairing button on the device to finish pairing it.")
 
 	payload := map[string]string{"imei": imei}
 
@@ -63,7 +63,7 @@ func Claim(session api.Session, arguments []string) error {
 		return err
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPost,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/devices", bytes.NewReader(body))
 
 	if err != nil {
@@ -72,12 +72,12 @@ func Claim(session api.Session, arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	claimClient := &http.Client{Timeout: 90 * time.Second}
+	pairingClient := &http.Client{Timeout: 90 * time.Second}
 
-	response, err := claimClient.Do(request)
+	response, err := pairingClient.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -86,12 +86,12 @@ func Claim(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Claimed device %s into fleet %q.\n", imei, fleetName)
+	fmt.Fprintf(invocation.Out, "Paired device %s with fleet %q.\n", imei, fleetName)
 
 	return nil
 }
 
-func List(session api.Session, arguments []string) error {
+func List(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
@@ -110,13 +110,13 @@ func List(session api.Session, arguments []string) error {
 		chosenFleetId = parsed
 	}
 
-	devices, err := api.FetchDevices(session)
+	devices, err := api.FetchDevices(invocation)
 
 	if err != nil {
 		return err
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -143,16 +143,16 @@ func List(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		err = json.NewEncoder(session.Out).Encode(filtered)
+		err = json.NewEncoder(invocation.Out).Encode(filtered)
 
 		return err
 	}
 
 	if len(filtered) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Fprintln(session.Out, "No devices yet. Claim one with device claim.")
+			fmt.Fprintln(invocation.Out, "No devices yet. Pair one with device pair.")
 		} else {
-			fmt.Fprintln(session.Out, "No devices in that fleet.")
+			fmt.Fprintln(invocation.Out, "No devices in that fleet.")
 		}
 
 		return nil
@@ -161,12 +161,12 @@ func List(session api.Session, arguments []string) error {
 	imeiWidth := len("IMEI")
 	nameWidth := len("NAME")
 	fleetWidth := len("FLEET")
-	stateWidth := len("STATE")
+	runStateWidth := len("RUN STATE")
 	storageWidth := len("STORAGE")
 	imeiValues := make([]string, len(filtered))
 	nameValues := make([]string, len(filtered))
 	fleetValues := make([]string, len(filtered))
-	stateValues := make([]string, len(filtered))
+	runStateValues := make([]string, len(filtered))
 	storageValues := make([]string, len(filtered))
 	lastSeenValues := make([]string, len(filtered))
 
@@ -200,16 +200,16 @@ func List(session api.Session, arguments []string) error {
 			}
 		}
 
-		state := "unknown"
+		runState := "unknown"
 
-		if device.ReportedState != nil {
-			switch *device.ReportedState {
+		if device.RunState != nil {
+			switch *device.RunState {
 			case 2:
-				state = "running"
+				runState = "running"
 			case 3:
-				state = "stopped"
+				runState = "stopped"
 			case 4:
-				state = "crashed"
+				runState = "crashed"
 			}
 		}
 
@@ -239,30 +239,30 @@ func List(session api.Session, arguments []string) error {
 		imeiValues[index] = api.Printable(device.Imei)
 		nameValues[index] = api.Printable(name)
 		fleetValues[index] = api.Printable(fleetName)
-		stateValues[index] = state
+		runStateValues[index] = runState
 		storageValues[index] = storage
 		lastSeenValues[index] = lastSeen
 		imeiWidth = max(imeiWidth, len(imeiValues[index]))
 		nameWidth = max(nameWidth, len(nameValues[index]))
 		fleetWidth = max(fleetWidth, len(fleetValues[index]))
-		stateWidth = max(stateWidth, len(stateValues[index]))
+		runStateWidth = max(runStateWidth, len(runStateValues[index]))
 		storageWidth = max(storageWidth, len(storageValues[index]))
 	}
 
-	fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
+	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET",
-		stateWidth, "STATE", storageWidth, "STORAGE", "LAST SEEN")
+		runStateWidth, "RUN STATE", storageWidth, "STORAGE", "LAST SEEN")
 
 	for index := range filtered {
-		fmt.Fprintf(session.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
+		fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 			imeiWidth, imeiValues[index], nameWidth, nameValues[index], fleetWidth, fleetValues[index],
-			stateWidth, stateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
+			runStateWidth, runStateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
 	}
 
 	return nil
 }
 
-func Rename(session api.Session, arguments []string) error {
+func Rename(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 {
 		return errors.New("device rename takes an IMEI and a new name, quoted if it has spaces")
 	}
@@ -285,7 +285,7 @@ func Rename(session api.Session, arguments []string) error {
 		return err
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPatch, "/devices/"+imei, bytes.NewReader(body))
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPatch, "/devices/"+imei, bytes.NewReader(body))
 
 	if err != nil {
 		return err
@@ -293,10 +293,10 @@ func Rename(session api.Session, arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -305,14 +305,14 @@ func Rename(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Renamed device %s to %q.\n", imei, name)
+	fmt.Fprintf(invocation.Out, "Renamed device %s to %q.\n", imei, name)
 
 	return nil
 }
 
-func Release(session api.Session, arguments []string) error {
+func Unpair(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 {
-		return errors.New("device release takes an IMEI")
+		return errors.New("device unpair takes an IMEI")
 	}
 
 	imei := arguments[0]
@@ -321,7 +321,7 @@ func Release(session api.Session, arguments []string) error {
 		return errors.New("the IMEI is the 15-digit number printed on the device")
 	}
 
-	devices, err := api.FetchDevices(session)
+	devices, err := api.FetchDevices(invocation)
 
 	if err != nil {
 		return err
@@ -347,7 +347,7 @@ func Release(session api.Session, arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -365,27 +365,27 @@ func Release(session api.Session, arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fmt.Fprintf(session.Out, "Release device %q from fleet %q? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] ", label, fleetName)
+	fmt.Fprintf(invocation.Out, "Unpair device %q from fleet %q? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] ", label, fleetName)
 
-	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Fprintln(session.Out, "Nothing released.")
+		fmt.Fprintln(invocation.Out, "Nothing unpaired.")
 		return nil
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodDelete, "/devices/"+imei, nil)
+	request, err := api.AuthenticatedRequest(invocation, http.MethodDelete, "/devices/"+imei, nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -394,7 +394,7 @@ func Release(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Released device %q from fleet %q.\n", label, fleetName)
+	fmt.Fprintf(invocation.Out, "Unpaired device %q from fleet %q.\n", label, fleetName)
 
 	return nil
 }

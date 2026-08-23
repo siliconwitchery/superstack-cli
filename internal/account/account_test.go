@@ -132,9 +132,9 @@ func TestAccountBalance(t *testing.T) {
 				fmt.Fprint(w, test.balances)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Balance(session, test.arguments)
+			err := Balance(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -169,7 +169,7 @@ func TestAccountBalance(t *testing.T) {
 	}
 }
 
-func TestAccountTopup(t *testing.T) {
+func TestAccountTopUp(t *testing.T) {
 	tests := []struct {
 		name        string
 		arguments   []string
@@ -181,14 +181,14 @@ func TestAccountTopup(t *testing.T) {
 		wantError   string
 	}{
 		{
-			name:        "a top-up link opened on enter",
+			name:        "the top-up page opened on enter",
 			arguments:   []string{"3"},
 			stdin:       "\n",
 			wantPath:    "/fleets/3/topup",
 			wantBrowser: true,
 		},
 		{
-			name:      "a top-up link left alone",
+			name:      "the top-up page left alone",
 			arguments: []string{"3"},
 			wantPath:  "/fleets/3/topup",
 		},
@@ -245,13 +245,13 @@ func TestAccountTopup(t *testing.T) {
 				fmt.Fprint(w, `{"url":"https://checkout.stripe.com/c/pay/cs_test_1"}`)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
-			session.In = strings.NewReader(test.stdin)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
+			invocation.In = strings.NewReader(test.stdin)
 
 			browserOpens := make(chan string, 1)
-			session.OpenBrowser = func(url string) { browserOpens <- url }
+			invocation.OpenBrowser = func(url string) { browserOpens <- url }
 
-			err := Topup(session, test.arguments)
+			err := TopUp(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -268,7 +268,7 @@ func TestAccountTopup(t *testing.T) {
 			}
 
 			if !strings.Contains(printed, "https://checkout.stripe.com/c/pay/cs_test_1") {
-				t.Errorf("the output %q does not show the payment link", printed)
+				t.Errorf("the output %q does not show the top-up page", printed)
 			}
 
 			if !strings.Contains(printed, "The credit appears on the balance once the top-up completes.") {
@@ -280,7 +280,7 @@ func TestAccountTopup(t *testing.T) {
 				if !test.wantBrowser {
 					t.Errorf("the browser opened %q although enter was never pressed", url)
 				} else if url != "https://checkout.stripe.com/c/pay/cs_test_1" {
-					t.Errorf("the browser opened %q, want the payment link", url)
+					t.Errorf("the browser opened %q, want the top-up page", url)
 				}
 
 			default:
@@ -367,17 +367,17 @@ func TestAccountDelete(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			path, err := api.KeyPath()
+			path, err := api.LoginKeyPath()
 
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			session.In = strings.NewReader(test.answer)
+			invocation.In = strings.NewReader(test.answer)
 
-			err = Delete(session, test.arguments)
+			err = Delete(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -411,14 +411,14 @@ func TestAccountDelete(t *testing.T) {
 }
 
 func TestAccountDeleteAsksNothingWhenTheServerIsGone(t *testing.T) {
-	session, out := apitest.LoggedInSession(t, http.NewServeMux())
+	invocation, out := apitest.LoggedInInvocation(t, http.NewServeMux())
 
 	gone := httptest.NewServer(http.NotFoundHandler())
 	gone.Close()
 
-	session.Base = gone.URL
+	invocation.Base = gone.URL
 
-	err := Delete(session, nil)
+	err := Delete(invocation, nil)
 
 	if err == nil || !strings.Contains(err.Error(), "could not be reached") {
 		t.Fatalf("error = %v, want it to mention the server could not be reached", err)
@@ -470,11 +470,11 @@ func TestAccountDeleteStopsWhenTheProbeIsRefused(t *testing.T) {
 				deleted = true
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			session.In = strings.NewReader("y\n")
+			invocation.In = strings.NewReader("y\n")
 
-			err := Delete(session, nil)
+			err := Delete(invocation, nil)
 
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("error = %v, want the server's own refusal", err)

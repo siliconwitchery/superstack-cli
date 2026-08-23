@@ -13,7 +13,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func Create(session api.Session, arguments []string) error {
+func Create(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 || arguments[0] == "" {
 		return errors.New("fleet create takes one name, quoted if it has spaces")
 	}
@@ -24,7 +24,7 @@ func Create(session api.Session, arguments []string) error {
 		return err
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPost, "/fleets", bytes.NewReader(body))
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost, "/fleets", bytes.NewReader(body))
 
 	if err != nil {
 		return err
@@ -32,10 +32,10 @@ func Create(session api.Session, arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -55,32 +55,32 @@ func Create(session api.Session, arguments []string) error {
 		return err
 	}
 
-	fmt.Fprintf(session.Out, "Created fleet %q with id %d.\n", created.Name, created.Id)
+	fmt.Fprintf(invocation.Out, "Created fleet %q with id %d.\n", created.Name, created.Id)
 
 	return nil
 }
 
-func List(session api.Session, arguments []string) error {
+func List(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) != 0 {
 		return errors.New("fleet list takes no arguments")
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
 	}
 
 	if jsonOutput {
-		err = json.NewEncoder(session.Out).Encode(fleets)
+		err = json.NewEncoder(invocation.Out).Encode(fleets)
 
 		return err
 	}
 
 	if len(fleets) == 0 {
-		fmt.Fprintln(session.Out, "No fleets yet. Create one with fleet create.")
+		fmt.Fprintln(invocation.Out, "No fleets yet. Create one with fleet create.")
 		return nil
 	}
 
@@ -94,7 +94,7 @@ func List(session api.Session, arguments []string) error {
 		nameWidth = max(nameWidth, len(nameValues[index]))
 	}
 
-	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "ROLE")
+	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "ROLE")
 
 	for index, fleet := range fleets {
 		role := "member"
@@ -103,13 +103,13 @@ func List(session api.Session, arguments []string) error {
 			role = "owner"
 		}
 
-		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, fleet.Id, nameWidth, nameValues[index], role)
+		fmt.Fprintf(invocation.Out, "%-*d  %-*s  %s\n", idWidth, fleet.Id, nameWidth, nameValues[index], role)
 	}
 
 	return nil
 }
 
-func Rename(session api.Session, arguments []string) error {
+func Rename(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 {
 		return errors.New("fleet rename takes a fleet id and a new name, quoted if it has spaces")
 	}
@@ -132,7 +132,7 @@ func Rename(session api.Session, arguments []string) error {
 		return err
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPatch,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPatch,
 		"/fleets/"+strconv.FormatInt(fleetId, 10), bytes.NewReader(body))
 
 	if err != nil {
@@ -141,10 +141,10 @@ func Rename(session api.Session, arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -153,12 +153,12 @@ func Rename(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Renamed fleet %d to %q.\n", fleetId, name)
+	fmt.Fprintf(invocation.Out, "Renamed fleet %d to %q.\n", fleetId, name)
 
 	return nil
 }
 
-func Transfer(session api.Session, arguments []string) error {
+func Transfer(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 || arguments[1] == "" {
 		return errors.New("fleet transfer takes a fleet id and an email address")
 	}
@@ -171,7 +171,7 @@ func Transfer(session api.Session, arguments []string) error {
 
 	email := arguments[1]
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -191,14 +191,14 @@ func Transfer(session api.Session, arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	fmt.Fprintf(session.Out, "Hand fleet %q to %s? They become the owner, and you lose access to the fleet, its devices and its credit. [y/N] ", name, email)
+	fmt.Fprintf(invocation.Out, "Hand fleet %q to %s? They become the owner, and you lose access to the fleet, its devices and its credit. [y/N] ", name, email)
 
-	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Fprintln(session.Out, "Nothing transferred.")
+		fmt.Fprintln(invocation.Out, "Nothing transferred.")
 		return nil
 	}
 
@@ -208,7 +208,7 @@ func Transfer(session api.Session, arguments []string) error {
 		return err
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPost,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/owner", bytes.NewReader(body))
 
 	if err != nil {
@@ -217,10 +217,10 @@ func Transfer(session api.Session, arguments []string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -229,12 +229,12 @@ func Transfer(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Transferred fleet %q to %s.\n", name, email)
+	fmt.Fprintf(invocation.Out, "Transferred fleet %q to %s.\n", name, email)
 
 	return nil
 }
 
-func Delete(session api.Session, arguments []string) error {
+func Delete(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 {
 		return errors.New("fleet delete takes a fleet id")
 	}
@@ -245,7 +245,7 @@ func Delete(session api.Session, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -265,7 +265,7 @@ func Delete(session api.Session, arguments []string) error {
 		return errors.New("no such fleet")
 	}
 
-	balances, err := api.FetchBalances(session)
+	balances, err := api.FetchBalances(invocation)
 
 	if err != nil {
 		return err
@@ -291,36 +291,36 @@ func Delete(session api.Session, arguments []string) error {
 		}
 	}
 
-	consequence := "It wipes their files and restarts their code, and claiming one again means pressing its pairing button in person."
+	consequence := "It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person."
 
 	if forfeitUnknown {
-		fmt.Fprintf(session.Out, "Delete fleet %q, release its devices, and forfeit its remaining credit? %s [y/N] ", name, consequence)
+		fmt.Fprintf(invocation.Out, "Delete fleet %q, unpair its devices, and forfeit its remaining credit? %s [y/N] ", name, consequence)
 	} else if forfeited == "" {
-		fmt.Fprintf(session.Out, "Delete fleet %q and release its devices? %s [y/N] ", name, consequence)
+		fmt.Fprintf(invocation.Out, "Delete fleet %q and unpair its devices? %s [y/N] ", name, consequence)
 	} else {
-		fmt.Fprintf(session.Out, "Delete fleet %q, release its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
+		fmt.Fprintf(invocation.Out, "Delete fleet %q, unpair its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
 	}
 
-	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Fprintln(session.Out, "Nothing deleted.")
+		fmt.Fprintln(invocation.Out, "Nothing deleted.")
 		return nil
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodDelete,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodDelete,
 		"/fleets/"+strconv.FormatInt(fleetId, 10), nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -329,7 +329,7 @@ func Delete(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(session.Out, "Deleted fleet %q.\n", name)
+	fmt.Fprintf(invocation.Out, "Deleted fleet %q.\n", name)
 
 	return nil
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func IsolateKeyStorage(t *testing.T) string {
+func IsolateLoginKeyStorage(t *testing.T) string {
 	t.Helper()
 
 	temporary := t.TempDir()
@@ -24,12 +24,12 @@ func IsolateKeyStorage(t *testing.T) string {
 	return temporary
 }
 
-func LoggedInSession(t *testing.T, handler http.Handler) (api.Session, *bytes.Buffer) {
+func LoggedInInvocation(t *testing.T, handler http.Handler) (api.Invocation, *bytes.Buffer) {
 	t.Helper()
 
-	IsolateKeyStorage(t)
+	IsolateLoginKeyStorage(t)
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func LoggedInSession(t *testing.T, handler http.Handler) (api.Session, *bytes.Bu
 
 	authorized := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer ssk_test" {
-			t.Errorf("%s %s carried authorization %q, want the stored key",
+			t.Errorf("%s %s carried authorization %q, want the stored login key",
 				r.Method, r.URL.Path, r.Header.Get("Authorization"))
 		}
 
@@ -61,8 +61,8 @@ func LoggedInSession(t *testing.T, handler http.Handler) (api.Session, *bytes.Bu
 	t.Cleanup(server.Close)
 
 	out := &bytes.Buffer{}
-	session := api.NewSession(server.URL, "test", strings.NewReader(""), out)
-	session.OpenBrowser = func(url string) {}
+	invocation := api.NewInvocation(server.URL, "test", strings.NewReader(""), out)
+	invocation.OpenBrowser = func(url string) {}
 
-	return session, out
+	return invocation, out
 }
