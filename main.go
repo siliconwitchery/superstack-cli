@@ -79,7 +79,7 @@ var sections = []dispatch.Section{
 		Title: "Account",
 		Commands: []dispatch.Command{
 			{Name: "account balance", Arguments: "[fleet_id] [--json]", Summary: "Show the credit left on your fleets", Run: account.Balance},
-			{Name: "account top-up", Arguments: "<fleet_id>", Summary: "Add credit to a fleet", Run: account.TopUp},
+			{Name: "account topup", Arguments: "<fleet_id>", Summary: "Add credit to a fleet", Run: account.TopUp},
 			{Name: "account delete", Summary: "Delete your account entirely", Run: account.Delete},
 		},
 	},

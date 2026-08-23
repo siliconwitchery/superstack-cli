@@ -160,7 +160,7 @@ func TestNoPartImportsAnother(t *testing.T) {
 
 func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 	wired := []string{
-		"account balance", "account delete", "account top-up",
+		"account balance", "account delete", "account topup",
 		"device list", "device pair", "device rename", "device unpair",
 		"fleet create", "fleet delete", "fleet key create", "fleet key list",
 		"fleet key revoke", "fleet list", "fleet rename", "fleet transfer",

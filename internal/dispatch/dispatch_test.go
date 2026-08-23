@@ -149,7 +149,7 @@ func TestResolve(t *testing.T) {
 		{Name: "member add"},
 		{Name: "fleet key create"},
 		{Name: "account balance"},
-		{Name: "account top-up"},
+		{Name: "account topup"},
 		{Name: "upload"},
 	}}}
 
@@ -166,7 +166,7 @@ func TestResolve(t *testing.T) {
 		{arguments: []string{"member", "add", "member@example.com"}, name: "member add", rest: []string{"member@example.com"}, found: true},
 		{arguments: []string{"fleet", "key", "create", "42", "production"}, name: "fleet key create", rest: []string{"42", "production"}, found: true},
 		{arguments: []string{"account", "balance"}, name: "account balance", rest: []string{}, found: true},
-		{arguments: []string{"account", "top-up", "42"}, name: "account top-up", rest: []string{"42"}, found: true},
+		{arguments: []string{"account", "topup", "42"}, name: "account topup", rest: []string{"42"}, found: true},
 		{arguments: []string{"upload", "./main.lua", "--device", "sensor-01"}, name: "upload", rest: []string{"./main.lua", "--device", "sensor-01"}, found: true},
 		{arguments: []string{"fleet"}, found: false},
 		{arguments: []string{"member"}, found: false},

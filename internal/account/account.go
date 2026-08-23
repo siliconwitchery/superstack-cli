@@ -112,7 +112,7 @@ func Balance(invocation api.Invocation, arguments []string) error {
 
 func TopUp(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 {
-		return errors.New("account top-up takes a fleet id")
+		return errors.New("account topup takes a fleet id")
 	}
 
 	fleetId, err := strconv.ParseInt(arguments[0], 10, 64)
