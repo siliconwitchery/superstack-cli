@@ -1,4 +1,4 @@
-package key
+package fleetkey
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api/apitest"
 )
 
-func TestKeyCreate(t *testing.T) {
+func TestFleetKeyCreate(t *testing.T) {
 	tests := []struct {
 		name      string
 		arguments []string
@@ -21,7 +21,7 @@ func TestKeyCreate(t *testing.T) {
 		wantError string
 	}{
 		{
-			name:      "the server answers without a key",
+			name:      "the server answers without a fleet key",
 			arguments: []string{"3", "deploy server"},
 			wantPath:  "/fleets/3/keys",
 			wantLabel: "deploy server",
@@ -29,7 +29,7 @@ func TestKeyCreate(t *testing.T) {
 			wantError: "was not created",
 		},
 		{
-			name:      "a labelled key",
+			name:      "a labelled fleet key",
 			arguments: []string{"3", "deploy server"},
 			wantPath:  "/fleets/3/keys",
 			wantLabel: "deploy server",
@@ -105,9 +105,9 @@ func TestKeyCreate(t *testing.T) {
 				fmt.Fprint(w, answer)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Create(session, test.arguments)
+			err := Create(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -124,11 +124,11 @@ func TestKeyCreate(t *testing.T) {
 			}
 
 			if !strings.Contains(printed, "ssf_testtesttestab2de") {
-				t.Errorf("the output %q does not show the key", printed)
+				t.Errorf("the output %q does not show the fleet key", printed)
 			}
 
 			if !strings.Contains(printed, "you will not see it again") {
-				t.Errorf("the output %q does not warn that the key cannot be shown again", printed)
+				t.Errorf("the output %q does not warn that the fleet key cannot be shown again", printed)
 			}
 
 			if !strings.Contains(printed, "Created fleet key 1.") {
@@ -138,12 +138,12 @@ func TestKeyCreate(t *testing.T) {
 	}
 }
 
-func TestKeyList(t *testing.T) {
+func TestFleetKeyList(t *testing.T) {
 	fleets := `[{"id":3,"name":"crew","owner":true},` +
 		`{"id":4,"name":"skunkworks","owner":false},` +
 		`{"id":5,"name":"spares","owner":true}]`
 
-	keys := `[{"id":1,"fleet":3,"label":"deploy server","suffix":"ab2de"},` +
+	fleetKeys := `[{"id":1,"fleet":3,"label":"deploy server","suffix":"ab2de"},` +
 		`{"id":2,"fleet":4,"label":"lab sensor","suffix":"f9hjk"}]`
 
 	tests := []struct {
@@ -152,22 +152,22 @@ func TestKeyList(t *testing.T) {
 		wantShown  []string
 		wantHidden []string
 		wantError  string
-		keys       string
+		fleetKeys  string
 		refusal    string
 	}{
 		{
 			name:      "server refusal",
 			arguments: []string{},
-			refusal:   "keys unavailable",
-			wantError: "keys unavailable",
+			refusal:   "fleet keys unavailable",
+			wantError: "fleet keys unavailable",
 		},
 		{
-			name:      "every fleet's keys",
+			name:      "every fleet's fleet keys",
 			arguments: []string{},
-			wantShown: []string{"ID  FLEET  FLEET NAME", "crew", "skunkworks", "...ab2de", "...f9hjk", "deploy server", "lab sensor"},
+			wantShown: []string{"ID  FLEET  FLEET NAME  FLEET KEY", "crew", "skunkworks", "...ab2de", "...f9hjk", "deploy server", "lab sensor"},
 		},
 		{
-			name:       "one fleet's keys",
+			name:       "one fleet's fleet keys",
 			arguments:  []string{"3"},
 			wantShown:  []string{"ID  FLEET  FLEET NAME", "crew", "...ab2de"},
 			wantHidden: []string{"skunkworks", "f9hjk", "lab sensor"},
@@ -175,18 +175,18 @@ func TestKeyList(t *testing.T) {
 		{
 			name:       "a label with control characters is escaped",
 			arguments:  []string{},
-			keys:       `[{"id":1,"fleet":3,"label":"\u001b[2Kquiet","suffix":"ab2de"}]`,
+			fleetKeys:  `[{"id":1,"fleet":3,"label":"\u001b[2Kquiet","suffix":"ab2de"}]`,
 			wantShown:  []string{`\x1b[2Kquiet`},
 			wantHidden: []string{"\x1b"},
 		},
 		{
-			name:      "no keys",
+			name:      "no fleet keys",
 			arguments: []string{},
-			wantShown: []string{"No fleet keys yet. Create one with key create."},
-			keys:      `[]`,
+			wantShown: []string{"No fleet keys yet. Create one with fleet key create."},
+			fleetKeys: `[]`,
 		},
 		{
-			name:       "a fleet without keys",
+			name:       "a fleet without fleet keys",
 			arguments:  []string{"5"},
 			wantShown:  []string{"No fleet keys on that fleet yet."},
 			wantHidden: []string{"ID  FLEET"},
@@ -206,7 +206,7 @@ func TestKeyList(t *testing.T) {
 		{
 			name:      "a fleet the list does not name",
 			arguments: []string{},
-			keys:      `[{"id":1,"fleet":99,"label":"orphan","suffix":"ab2de"}]`,
+			fleetKeys: `[{"id":1,"fleet":99,"label":"orphan","suffix":"ab2de"}]`,
 			wantShown: []string{"99     -"},
 		},
 		{
@@ -228,10 +228,10 @@ func TestKeyList(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			servedKeys := test.keys
+			servedFleetKeys := test.fleetKeys
 
-			if servedKeys == "" {
-				servedKeys = keys
+			if servedFleetKeys == "" {
+				servedFleetKeys = fleetKeys
 			}
 
 			mux := http.NewServeMux()
@@ -246,12 +246,12 @@ func TestKeyList(t *testing.T) {
 					return
 				}
 
-				fmt.Fprint(w, servedKeys)
+				fmt.Fprint(w, servedFleetKeys)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := List(session, test.arguments)
+			err := List(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -282,7 +282,7 @@ func TestKeyList(t *testing.T) {
 	}
 }
 
-func TestKeyRevoke(t *testing.T) {
+func TestFleetKeyRevoke(t *testing.T) {
 	tests := []struct {
 		name        string
 		arguments   []string
@@ -293,7 +293,7 @@ func TestKeyRevoke(t *testing.T) {
 		wantError   string
 	}{
 		{
-			name:        "revoke a key",
+			name:        "revoke a fleet key",
 			arguments:   []string{"3"},
 			answer:      "y\n",
 			wantRevoked: "/keys/3",
@@ -320,30 +320,30 @@ func TestKeyRevoke(t *testing.T) {
 			name:        "the server refuses after the confirmation",
 			arguments:   []string{"3"},
 			answer:      "y\n",
-			refusal:     "no such key",
+			refusal:     "no such fleet key",
 			wantRevoked: "/keys/3",
-			wantError:   "no such key",
+			wantError:   "no such fleet key",
 		},
 		{
-			name:      "a key that is not yours",
+			name:      "a fleet key that is not yours",
 			arguments: []string{"9"},
 			answer:    "y\n",
-			wantError: "no such key",
+			wantError: "no such fleet key",
 		},
 		{
-			name:      "no key id",
+			name:      "no fleet key id",
 			arguments: []string{},
-			wantError: "takes a key id",
+			wantError: "takes a fleet key id",
 		},
 		{
-			name:      "two key ids",
+			name:      "two fleet key ids",
 			arguments: []string{"3", "4"},
-			wantError: "takes a key id",
+			wantError: "takes a fleet key id",
 		},
 		{
 			name:      "a wordy id",
 			arguments: []string{"pilot"},
-			wantError: "shown by key list",
+			wantError: "shown by fleet key list",
 		},
 	}
 
@@ -368,10 +368,10 @@ func TestKeyRevoke(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
-			session.In = strings.NewReader(test.answer)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
+			invocation.In = strings.NewReader(test.answer)
 
-			err := Revoke(session, test.arguments)
+			err := Revoke(invocation, test.arguments)
 
 			printed := out.String()
 

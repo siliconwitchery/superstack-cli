@@ -12,7 +12,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api/apitest"
 )
 
-func TestDeviceClaim(t *testing.T) {
+func TestDevicePair(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
@@ -23,21 +23,21 @@ func TestDeviceClaim(t *testing.T) {
 		{
 			name:       "button pressed",
 			statusCode: http.StatusNoContent,
-			wantOutput: "Press the pairing button on the device to finish claiming it.\nClaimed device 354820091234567 into fleet \"pilot\".\n",
+			wantOutput: "Press the pairing button on the device to finish pairing it.\nPaired device 354820091234567 with fleet \"pilot\".\n",
 		},
 		{
 			name:       "button not pressed",
 			statusCode: http.StatusRequestTimeout,
 			message:    "the button was not pressed in time",
-			wantOutput: "Press the pairing button on the device to finish claiming it.\n",
+			wantOutput: "Press the pairing button on the device to finish pairing it.\n",
 			wantError:  "the button was not pressed in time",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			claimedImei := ""
-			claimedName := ""
+			pairedImei := ""
+			pairedName := ""
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
@@ -50,8 +50,8 @@ func TestDeviceClaim(t *testing.T) {
 				}{}
 
 				json.NewDecoder(r.Body).Decode(&body)
-				claimedImei = body.Imei
-				claimedName = body.Name
+				pairedImei = body.Imei
+				pairedName = body.Name
 
 				if r.Header.Get("Content-Type") != "application/json" {
 					t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
@@ -66,9 +66,9 @@ func TestDeviceClaim(t *testing.T) {
 				w.WriteHeader(test.statusCode)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Claim(session, []string{"354820091234567", "3", "roof sensor"})
+			err := Pair(invocation, []string{"354820091234567", "3", "roof sensor"})
 
 			printed := out.String()
 
@@ -80,8 +80,8 @@ func TestDeviceClaim(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, test.wantError)
 			}
 
-			if claimedImei != "354820091234567" || claimedName != "roof sensor" {
-				t.Errorf("the server received IMEI %q and name %q", claimedImei, claimedName)
+			if pairedImei != "354820091234567" || pairedName != "roof sensor" {
+				t.Errorf("the server received IMEI %q and name %q", pairedImei, pairedName)
 			}
 
 			if printed != test.wantOutput {
@@ -91,7 +91,7 @@ func TestDeviceClaim(t *testing.T) {
 	}
 }
 
-func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
+func TestDevicePairOmitsAnAbsentName(t *testing.T) {
 	nameWasPresent := false
 
 	mux := http.NewServeMux()
@@ -105,9 +105,9 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	session, out := apitest.LoggedInSession(t, mux)
+	invocation, out := apitest.LoggedInInvocation(t, mux)
 
-	err := Claim(session, []string{"354820091234567", "3"})
+	err := Pair(invocation, []string{"354820091234567", "3"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -117,12 +117,12 @@ func TestDeviceClaimOmitsAnAbsentName(t *testing.T) {
 		t.Error("the request included a name although none was given")
 	}
 
-	if out.String() != "Press the pairing button on the device to finish claiming it.\nClaimed device 354820091234567 into fleet \"pilot\".\n" {
+	if out.String() != "Press the pairing button on the device to finish pairing it.\nPaired device 354820091234567 with fleet \"pilot\".\n" {
 		t.Errorf("output = %q", out.String())
 	}
 }
 
-func TestDeviceClaimArguments(t *testing.T) {
+func TestDevicePairArguments(t *testing.T) {
 	tests := []struct {
 		name      string
 		arguments []string
@@ -137,7 +137,7 @@ func TestDeviceClaimArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Claim(api.Session{}, test.arguments)
+		err := Pair(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
@@ -145,15 +145,15 @@ func TestDeviceClaimArguments(t *testing.T) {
 	}
 }
 
-func TestDeviceClaimUnknownFleet(t *testing.T) {
+func TestDevicePairUnknownFleet(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[]`)
 	})
 
-	session, _ := apitest.LoggedInSession(t, mux)
+	invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-	err := Claim(session, []string{"354820091234567", "9"})
+	err := Pair(invocation, []string{"354820091234567", "9"})
 
 	if err == nil || err.Error() != "no such fleet" {
 		t.Fatalf("error = %v", err)
@@ -179,24 +179,24 @@ func TestDeviceList(t *testing.T) {
 		fleets     string
 		refusal    string
 	}{
-		{name: "table", wantShown: []string{"IMEI             NAME  FLEET     STATE    STORAGE            LAST SEEN", "roof", "pilot", "running", "1.2 kB of 57.3 kB", "just now", "-", "workshop", "crashed", "2.5 MB of 8.0 MB", "3 h ago", "unknown", "never"}},
+		{name: "table", wantShown: []string{"IMEI             NAME  FLEET     RUN STATE  STORAGE            LAST SEEN", "roof", "pilot", "running", "1.2 kB of 57.3 kB", "just now", "-", "workshop", "crashed", "2.5 MB of 8.0 MB", "3 h ago", "unknown", "never"}},
 		{name: "filtered", arguments: []string{"3"}, wantShown: []string{"111111111111111", "333333333333333"}, wantHidden: []string{"222222222222222", "workshop"}},
-		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`}, wantHidden: []string{"LAST SEEN", "222222222222222"}},
+		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`, `"run_state":2`}, wantHidden: []string{"LAST SEEN", "222222222222222", `"reported_state"`}},
 		{name: "empty fleet", arguments: []string{"5"}, wantExact: "No devices in that fleet.\n"},
-		{name: "no devices", devices: `[]`, fleets: `[]`, wantExact: "No devices yet. Claim one with device claim.\n"},
+		{name: "no devices", devices: `[]`, fleets: `[]`, wantExact: "No devices yet. Pair one with device pair.\n"},
 		{name: "server refusal", refusal: "devices unavailable", wantError: "devices unavailable"},
 		{name: "unknown fleet", arguments: []string{"9"}, wantError: "no such fleet"},
 		{name: "two ids", arguments: []string{"3", "4"}, wantError: "takes at most one fleet id"},
 		{name: "wordy id", arguments: []string{"pilot"}, wantError: "shown by fleet list"},
-		{name: "an unreadable last seen time leaves the rest of the table", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday"}]`, wantShown: []string{"111111111111111  roof  pilot  unknown  -        unknown"}},
-		{name: "a fleet the list does not name", devices: `[{"imei":"888888888888888","name":"orphan","fleet_id":99}]`, wantShown: []string{"888888888888888  orphan  -      unknown  -        never"}},
+		{name: "an unreadable last seen time leaves the rest of the table", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday"}]`, wantShown: []string{"111111111111111  roof  pilot  unknown    -        unknown"}},
+		{name: "a fleet the list does not name", devices: `[{"imei":"888888888888888","name":"orphan","fleet_id":99}]`, wantShown: []string{"888888888888888  orphan  -      unknown    -        never"}},
 		{name: "a name with control characters is escaped", devices: `[{"imei":"111111111111111","name":"\u001b[2K\rhidden","fleet_id":3}]`, wantShown: []string{`\x1b[2K\rhidden`}, wantHidden: []string{"\x1b"}},
 		{name: "minutes ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-12*time.Minute).Format(time.RFC3339)), wantShown: []string{"12 min ago"}},
 		{name: "days ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-49*time.Hour).Format(time.RFC3339)), wantShown: []string{"2 d ago"}},
-		{name: "stopped and undefined states", devices: `[{"imei":"444444444444444","name":"halted","fleet_id":3,"reported_state":3},{"imei":"555555555555555","name":"odd","fleet_id":3,"reported_state":1}]`, wantShown: []string{"stopped", "unknown"}},
+		{name: "stopped and undefined run states", devices: `[{"imei":"444444444444444","name":"halted","fleet_id":3,"reported_state":3},{"imei":"555555555555555","name":"odd","fleet_id":3,"reported_state":1}]`, wantShown: []string{"stopped", "unknown"}},
 		{name: "byte storage", devices: `[{"imei":"666666666666666","name":"bytes","fleet_id":3,"storage_used":999,"storage_total":999}]`, wantShown: []string{"999 B of 999 B"}},
-		{name: "missing used storage", devices: `[{"imei":"777777777777777","name":"nil-used","fleet_id":3,"storage_used":null,"storage_total":57344}]`, wantShown: []string{"777777777777777  nil-used  pilot  unknown  -        never"}},
-		{name: "missing total storage", devices: `[{"imei":"888888888888888","name":"nil-total","fleet_id":3,"storage_used":1240,"storage_total":null}]`, wantShown: []string{"888888888888888  nil-total  pilot  unknown  -        never"}},
+		{name: "missing used storage", devices: `[{"imei":"777777777777777","name":"nil-used","fleet_id":3,"storage_used":null,"storage_total":57344}]`, wantShown: []string{"777777777777777  nil-used  pilot  unknown    -        never"}},
+		{name: "missing total storage", devices: `[{"imei":"888888888888888","name":"nil-total","fleet_id":3,"storage_used":1240,"storage_total":null}]`, wantShown: []string{"888888888888888  nil-total  pilot  unknown    -        never"}},
 	}
 
 	for _, test := range tests {
@@ -223,9 +223,9 @@ func TestDeviceList(t *testing.T) {
 				fmt.Fprint(w, servedDevices)
 			})
 			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, servedFleets) })
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := List(session, test.arguments)
+			err := List(invocation, test.arguments)
 
 			printed := out.String()
 
@@ -292,9 +292,9 @@ func TestDeviceRename(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
 
-			err := Rename(session, []string{"354820091234567", " pilot "})
+			err := Rename(invocation, []string{"354820091234567", " pilot "})
 
 			if test.wantError != "" {
 				if err == nil || err.Error() != test.wantError {
@@ -331,7 +331,7 @@ func TestDeviceRenameArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Rename(api.Session{}, test.arguments)
+		err := Rename(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
@@ -339,27 +339,27 @@ func TestDeviceRenameArguments(t *testing.T) {
 	}
 }
 
-func TestDeviceRelease(t *testing.T) {
+func TestDeviceUnpair(t *testing.T) {
 	tests := []struct {
 		name         string
 		answer       string
 		devices      string
 		fleets       string
 		refusal      string
-		wantReleased bool
+		wantUnpaired bool
 		wantOutput   string
 		wantError    string
 	}{
-		{name: "confirmed", answer: "yes\n", wantReleased: true, wantOutput: "Release device \"354820091234567\" from fleet \"pilot\"? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] Released device \"354820091234567\" from fleet \"pilot\".\n"},
-		{name: "declined", answer: "n\n", wantOutput: "Release device \"354820091234567\" from fleet \"pilot\"? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] Nothing released.\n"},
-		{name: "a named device is named back, not its IMEI", answer: "n\n", devices: `[{"imei":"354820091234567","name":"rooftop","fleet_id":3,"last_seen_at":null}]`, wantOutput: "Release device \"rooftop\" from fleet \"pilot\"? It wipes the device's files and restarts its code, and claiming it again means pressing its pairing button in person. [y/N] Nothing released.\n"},
-		{name: "server refuses", answer: "y\n", refusal: "no such device", wantReleased: true, wantError: "no such device"},
+		{name: "confirmed", answer: "yes\n", wantUnpaired: true, wantOutput: "Unpair device \"354820091234567\" from fleet \"pilot\"? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] Unpaired device \"354820091234567\" from fleet \"pilot\".\n"},
+		{name: "declined", answer: "n\n", wantOutput: "Unpair device \"354820091234567\" from fleet \"pilot\"? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] Nothing unpaired.\n"},
+		{name: "a named device is named back, not its IMEI", answer: "n\n", devices: `[{"imei":"354820091234567","name":"rooftop","fleet_id":3,"last_seen_at":null}]`, wantOutput: "Unpair device \"rooftop\" from fleet \"pilot\"? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] Nothing unpaired.\n"},
+		{name: "server refuses", answer: "y\n", refusal: "no such device", wantUnpaired: true, wantError: "no such device"},
 		{name: "device belongs to an inaccessible fleet", fleets: `[]`, wantError: "no such device, device list shows yours"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			releasedPath := ""
+			unpairedPath := ""
 			fleets := test.fleets
 			devices := test.devices
 
@@ -379,7 +379,7 @@ func TestDeviceRelease(t *testing.T) {
 				fmt.Fprint(w, fleets)
 			})
 			mux.HandleFunc("DELETE /devices/{imei}", func(w http.ResponseWriter, r *http.Request) {
-				releasedPath = r.URL.Path
+				unpairedPath = r.URL.Path
 
 				if test.refusal != "" {
 					http.Error(w, test.refusal, http.StatusNotFound)
@@ -389,10 +389,10 @@ func TestDeviceRelease(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			session, out := apitest.LoggedInSession(t, mux)
-			session.In = strings.NewReader(test.answer)
+			invocation, out := apitest.LoggedInInvocation(t, mux)
+			invocation.In = strings.NewReader(test.answer)
 
-			err := Release(session, []string{"354820091234567"})
+			err := Unpair(invocation, []string{"354820091234567"})
 
 			printed := out.String()
 
@@ -408,18 +408,18 @@ func TestDeviceRelease(t *testing.T) {
 				t.Errorf("output = %q", printed)
 			}
 
-			if test.wantReleased && releasedPath != "/devices/354820091234567" {
-				t.Errorf("released path = %q", releasedPath)
+			if test.wantUnpaired && unpairedPath != "/devices/354820091234567" {
+				t.Errorf("unpaired path = %q", unpairedPath)
 			}
 
-			if !test.wantReleased && releasedPath != "" {
-				t.Errorf("released path = %q after decline", releasedPath)
+			if !test.wantUnpaired && unpairedPath != "" {
+				t.Errorf("unpaired path = %q after decline", unpairedPath)
 			}
 		})
 	}
 }
 
-func TestDeviceReleaseArgumentsAndUnknownDevice(t *testing.T) {
+func TestDeviceUnpairArgumentsAndUnknownDevice(t *testing.T) {
 	tests := []struct {
 		name      string
 		arguments []string
@@ -432,7 +432,7 @@ func TestDeviceReleaseArgumentsAndUnknownDevice(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Release(api.Session{}, test.arguments)
+		err := Unpair(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), test.wantError) {
 			t.Errorf("%s: error = %v", test.name, err)
@@ -443,9 +443,9 @@ func TestDeviceReleaseArgumentsAndUnknownDevice(t *testing.T) {
 	mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[]`)
 	})
-	session, _ := apitest.LoggedInSession(t, mux)
+	invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-	err := Release(session, []string{"354820091234567"})
+	err := Unpair(invocation, []string{"354820091234567"})
 
 	if err == nil || err.Error() != "no such device, device list shows yours" {
 		t.Fatalf("error = %v", err)

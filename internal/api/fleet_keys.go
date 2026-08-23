@@ -5,14 +5,15 @@ import (
 	"net/http"
 )
 
-type FleetEntry struct {
-	Id    int64  `json:"id"`
-	Name  string `json:"name"`
-	Owner bool   `json:"owner"`
+type FleetKeyEntry struct {
+	Id     int64  `json:"id"`
+	Fleet  int64  `json:"fleet"`
+	Label  string `json:"label"`
+	Suffix string `json:"suffix"`
 }
 
-func FetchFleets(invocation Invocation) ([]FleetEntry, error) {
-	request, err := AuthenticatedRequest(invocation, http.MethodGet, "/fleets", nil)
+func FetchFleetKeys(invocation Invocation) ([]FleetKeyEntry, error) {
+	request, err := AuthenticatedRequest(invocation, http.MethodGet, "/keys", nil)
 
 	if err != nil {
 		return nil, err
@@ -30,13 +31,13 @@ func FetchFleets(invocation Invocation) ([]FleetEntry, error) {
 		return nil, ServerError(response)
 	}
 
-	fleets := []FleetEntry{}
+	fleetKeys := []FleetKeyEntry{}
 
-	err = Decode(response, &fleets)
+	err = Decode(response, &fleetKeys)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return fleets, nil
+	return fleetKeys, nil
 }

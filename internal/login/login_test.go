@@ -88,7 +88,7 @@ func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, dev
 		}
 
 		if len(*polledAt) >= len(pollAnswers) {
-			t.Error("polled more often than the script allows")
+			t.Error("the provider was polled too many times")
 			http.Error(w, "over-polled", http.StatusTooManyRequests)
 			return
 		}
@@ -112,7 +112,7 @@ func fakeProviderForLogin(t *testing.T, provider string, deviceInterval int, dev
 	return polledAt, server.URL
 }
 
-func fakeSuperstack(t *testing.T, providersRefusal string, loginAnswer string) (api.Session, *bytes.Buffer) {
+func fakeSuperstack(t *testing.T, providersRefusal string, loginAnswer string) (api.Invocation, *bytes.Buffer) {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -158,10 +158,10 @@ func fakeSuperstack(t *testing.T, providersRefusal string, loginAnswer string) (
 	t.Cleanup(server.Close)
 
 	out := &bytes.Buffer{}
-	session := api.NewSession(server.URL, "test", strings.NewReader(""), out)
-	session.OpenBrowser = func(url string) {}
+	invocation := api.NewInvocation(server.URL, "test", strings.NewReader(""), out)
+	invocation.OpenBrowser = func(url string) {}
 
-	return session, out
+	return invocation, out
 }
 
 func TestLogin(t *testing.T) {
@@ -195,7 +195,7 @@ func TestLogin(t *testing.T) {
 			wantError:    "the code expired before it was entered, run login again",
 		},
 		{
-			name:        "poll has neither an error nor a token",
+			name:        "poll has neither an error nor a provider access token",
 			provider:    "github",
 			pollAnswers: []string{`{}`},
 			wantError:   "the login did not complete on github, run login again",
@@ -207,7 +207,7 @@ func TestLogin(t *testing.T) {
 			wantError:   "the login did not complete on github, run login again",
 		},
 		{
-			name:        "superstack returns an empty key",
+			name:        "superstack returns an empty login key",
 			provider:    "github",
 			pollAnswers: []string{`{"access_token":"gho_test"}`},
 			loginAnswer: `{"key":"","email":"someone@example.com"}`,
@@ -287,7 +287,7 @@ func TestLogin(t *testing.T) {
 			wantError:   "expired",
 		},
 		{
-			name:        "server rejects the token",
+			name:        "server rejects the provider access token",
 			provider:    "github",
 			pollAnswers: []string{`{"access_token": "gho_stolen"}`},
 			wantError:   "did not confirm the login",
@@ -296,7 +296,7 @@ func TestLogin(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			apitest.IsolateKeyStorage(t)
+			apitest.IsolateLoginKeyStorage(t)
 
 			deviceInterval := test.deviceInterval
 
@@ -305,15 +305,15 @@ func TestLogin(t *testing.T) {
 			}
 
 			polledAt, providerBase := fakeProviderForLogin(t, test.provider, deviceInterval, test.deviceAnswer, test.pollAnswers)
-			session, _ := fakeSuperstack(t, test.providersError, test.loginAnswer)
+			invocation, _ := fakeSuperstack(t, test.providersError, test.loginAnswer)
 
 			if test.provider == "gitlab" {
-				session.GitlabBase = providerBase
+				invocation.GitlabBase = providerBase
 			} else {
-				session.GithubBase = providerBase
+				invocation.GithubBase = providerBase
 			}
 
-			err := Login(session, []string{test.provider})
+			err := Login(invocation, []string{test.provider})
 
 			if test.wantPollGap > 0 {
 				if len(*polledAt) < 2 {
@@ -332,10 +332,10 @@ func TestLogin(t *testing.T) {
 					t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
 				}
 
-				path, _ := api.KeyPath()
+				path, _ := api.LoginKeyPath()
 
 				if _, statError := os.Stat(path); statError == nil {
-					t.Fatal("a key was stored despite the failed login")
+					t.Fatal("a login key was stored despite the failed login")
 				}
 
 				return
@@ -345,7 +345,7 @@ func TestLogin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			path, err := api.KeyPath()
+			path, err := api.LoginKeyPath()
 
 			if err != nil {
 				t.Fatal(err)
@@ -358,7 +358,7 @@ func TestLogin(t *testing.T) {
 			}
 
 			if strings.TrimSpace(string(stored)) != "ssk_test" {
-				t.Errorf("stored key = %q, want ssk_test", stored)
+				t.Errorf("stored login key = %q, want ssk_test", stored)
 			}
 
 			info, err := os.Stat(path)
@@ -368,23 +368,23 @@ func TestLogin(t *testing.T) {
 			}
 
 			if info.Mode().Perm() != 0o600 {
-				t.Errorf("key file mode = %v, want 0600", info.Mode().Perm())
+				t.Errorf("login key file mode = %v, want 0600", info.Mode().Perm())
 			}
 		})
 	}
 }
 
 func TestLoginOpensTheBrowserOnEnter(t *testing.T) {
-	apitest.IsolateKeyStorage(t)
+	apitest.IsolateLoginKeyStorage(t)
 
 	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
-	session, _ := fakeSuperstack(t, "", "")
-	session.GitlabBase = providerBase
-	session.In = strings.NewReader("\n")
+	invocation, _ := fakeSuperstack(t, "", "")
+	invocation.GitlabBase = providerBase
+	invocation.In = strings.NewReader("\n")
 	browserOpens := make(chan string, 1)
-	session.OpenBrowser = func(url string) { browserOpens <- url }
+	invocation.OpenBrowser = func(url string) { browserOpens <- url }
 
-	err := Login(session, []string{"gitlab"})
+	err := Login(invocation, []string{"gitlab"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -393,7 +393,7 @@ func TestLoginOpensTheBrowserOnEnter(t *testing.T) {
 	select {
 	case url := <-browserOpens:
 		if url != "https://gitlab.com/-/user_settings/device?user_code=WDJB-MJHT" {
-			t.Errorf("the browser opened %q, want the verification link with the code filled in", url)
+			t.Errorf("the browser opened %q, want the verification page with the code filled in", url)
 		}
 
 	case <-time.After(2 * time.Second):
@@ -413,7 +413,7 @@ func TestLoginRequiresAProvider(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := Login(api.Session{}, test.arguments)
+		err := Login(api.Invocation{}, test.arguments)
 
 		if err == nil || !strings.Contains(err.Error(), "a provider: github or gitlab") {
 			t.Errorf("%s: error = %v, want the provider hint", test.name, err)
@@ -422,7 +422,7 @@ func TestLoginRequiresAProvider(t *testing.T) {
 }
 
 func TestLoginProviderNotOffered(t *testing.T) {
-	apitest.IsolateKeyStorage(t)
+	apitest.IsolateLoginKeyStorage(t)
 
 	mux := http.NewServeMux()
 
@@ -435,9 +435,9 @@ func TestLoginProviderNotOffered(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	out := &bytes.Buffer{}
-	session := api.NewSession(server.URL, "test", strings.NewReader(""), out)
+	invocation := api.NewInvocation(server.URL, "test", strings.NewReader(""), out)
 
-	err := Login(session, []string{"gitlab"})
+	err := Login(invocation, []string{"gitlab"})
 
 	if err == nil || !strings.Contains(err.Error(), "offers no gitlab login") {
 		t.Fatalf("error = %v, want it to say the server offers no gitlab login", err)
@@ -446,16 +446,16 @@ func TestLoginProviderNotOffered(t *testing.T) {
 
 func TestLogout(t *testing.T) {
 	tests := []struct {
-		name           string
-		arguments      []string
-		storedKey      string
-		storeEmptyKey  bool
-		serverDown     bool
-		revokeStatus   int
-		wantError      string
-		wantRevocation bool
-		wantKeyKept    bool
-		wantShown      string
+		name               string
+		arguments          []string
+		storedLoginKey     string
+		storeEmptyLoginKey bool
+		serverDown         bool
+		revokeStatus       int
+		wantError          string
+		wantRevocation     bool
+		wantKeyKept        bool
+		wantShown          string
 	}{
 		{
 			name:      "arguments are refused",
@@ -463,8 +463,8 @@ func TestLogout(t *testing.T) {
 			wantError: "logout takes no arguments",
 		},
 		{
-			name:           "revokes and forgets the stored key",
-			storedKey:      "ssk_test",
+			name:           "revokes and forgets the stored login key",
+			storedLoginKey: "ssk_test",
 			revokeStatus:   http.StatusNoContent,
 			wantRevocation: true,
 			wantShown:      "Logged out.\n",
@@ -474,38 +474,38 @@ func TestLogout(t *testing.T) {
 			wantShown: "Not logged in.\n",
 		},
 		{
-			name:          "an empty stored login",
-			storeEmptyKey: true,
-			wantShown:     "Not logged in.\n",
-			wantKeyKept:   true,
+			name:               "an empty stored login",
+			storeEmptyLoginKey: true,
+			wantShown:          "Not logged in.\n",
+			wantKeyKept:        true,
 		},
 		{
 			name:           "server refuses the revocation",
-			storedKey:      "ssk_test",
+			storedLoginKey: "ssk_test",
 			revokeStatus:   http.StatusServiceUnavailable,
 			wantError:      "still logged in",
 			wantRevocation: true,
 			wantKeyKept:    true,
 		},
 		{
-			name:        "server unreachable",
-			storedKey:   "ssk_test",
-			serverDown:  true,
-			wantError:   "still logged in",
-			wantKeyKept: true,
+			name:           "server unreachable",
+			storedLoginKey: "ssk_test",
+			serverDown:     true,
+			wantError:      "still logged in",
+			wantKeyKept:    true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			apitest.IsolateKeyStorage(t)
+			apitest.IsolateLoginKeyStorage(t)
 
-			revokedKey := ""
+			revokedLoginKey := ""
 
 			mux := http.NewServeMux()
 
 			mux.HandleFunc("POST /logout", func(w http.ResponseWriter, r *http.Request) {
-				revokedKey = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+				revokedLoginKey = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 
 				w.WriteHeader(test.revokeStatus)
 			})
@@ -519,29 +519,29 @@ func TestLogout(t *testing.T) {
 			}
 
 			out := &bytes.Buffer{}
-			session := api.NewSession(server.URL, "test", strings.NewReader(""), out)
+			invocation := api.NewInvocation(server.URL, "test", strings.NewReader(""), out)
 
-			path, err := api.KeyPath()
+			path, err := api.LoginKeyPath()
 
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if test.storedKey != "" || test.storeEmptyKey {
+			if test.storedLoginKey != "" || test.storeEmptyLoginKey {
 				err = os.MkdirAll(filepath.Dir(path), 0o700)
 
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				err = os.WriteFile(path, []byte(test.storedKey+"\n"), 0o600)
+				err = os.WriteFile(path, []byte(test.storedLoginKey+"\n"), 0o600)
 
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			err = Logout(session, test.arguments)
+			err = Logout(invocation, test.arguments)
 
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
@@ -551,22 +551,22 @@ func TestLogout(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if test.wantRevocation && revokedKey != test.storedKey {
-				t.Errorf("the server saw %q revoked, want %q", revokedKey, test.storedKey)
+			if test.wantRevocation && revokedLoginKey != test.storedLoginKey {
+				t.Errorf("the server saw %q revoked, want %q", revokedLoginKey, test.storedLoginKey)
 			}
 
-			if !test.wantRevocation && revokedKey != "" {
-				t.Errorf("the server saw a revocation for %q, want none", revokedKey)
+			if !test.wantRevocation && revokedLoginKey != "" {
+				t.Errorf("the server saw a revocation for %q, want none", revokedLoginKey)
 			}
 
 			_, statError := os.Stat(path)
 
 			if test.wantKeyKept && statError != nil {
-				t.Error("the stored key is gone although the revocation failed")
+				t.Error("the stored login key is gone although the revocation failed")
 			}
 
 			if !test.wantKeyKept && !os.IsNotExist(statError) {
-				t.Error("the stored key still exists after logout")
+				t.Error("the stored login key still exists after logout")
 			}
 
 			if out.String() != test.wantShown {
@@ -577,9 +577,9 @@ func TestLogout(t *testing.T) {
 }
 
 func TestLoginReplacesAStoredLoginLeftTooOpen(t *testing.T) {
-	apitest.IsolateKeyStorage(t)
+	apitest.IsolateLoginKeyStorage(t)
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		t.Fatal(err)
@@ -604,10 +604,10 @@ func TestLoginReplacesAStoredLoginLeftTooOpen(t *testing.T) {
 	}
 
 	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
-	session, _ := fakeSuperstack(t, "", "")
-	session.GitlabBase = providerBase
+	invocation, _ := fakeSuperstack(t, "", "")
+	invocation.GitlabBase = providerBase
 
-	err = Login(session, []string{"gitlab"})
+	err = Login(invocation, []string{"gitlab"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -645,13 +645,13 @@ func TestLoginReplacesAStoredLoginLeftTooOpen(t *testing.T) {
 }
 
 func TestLoginShowsTheCodeAndWhereToEnterIt(t *testing.T) {
-	apitest.IsolateKeyStorage(t)
+	apitest.IsolateLoginKeyStorage(t)
 
 	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
-	session, out := fakeSuperstack(t, "", "")
-	session.GitlabBase = providerBase
+	invocation, out := fakeSuperstack(t, "", "")
+	invocation.GitlabBase = providerBase
 
-	err := Login(session, []string{"gitlab"})
+	err := Login(invocation, []string{"gitlab"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -672,9 +672,9 @@ func TestLoginKeepsAWorkingLoginWhenTheNewOneCannotBeSaved(t *testing.T) {
 		t.Skip("root ignores the folder mode this test rests on")
 	}
 
-	apitest.IsolateKeyStorage(t)
+	apitest.IsolateLoginKeyStorage(t)
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		t.Fatal(err)
@@ -703,10 +703,10 @@ func TestLoginKeepsAWorkingLoginWhenTheNewOneCannotBeSaved(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(directory, 0o700) })
 
 	_, providerBase := fakeProviderForLogin(t, "gitlab", 1, "", []string{`{"access_token": "glpat-test"}`})
-	session, out := fakeSuperstack(t, "", "")
-	session.GitlabBase = providerBase
+	invocation, out := fakeSuperstack(t, "", "")
+	invocation.GitlabBase = providerBase
 
-	err = Login(session, []string{"gitlab"})
+	err = Login(invocation, []string{"gitlab"})
 
 	if err == nil || !strings.Contains(err.Error(), "could not be saved") {
 		t.Fatalf("error = %v, want it to say the login could not be saved", err)
@@ -723,14 +723,14 @@ func TestLoginKeepsAWorkingLoginWhenTheNewOneCannotBeSaved(t *testing.T) {
 	}
 
 	if strings.Contains(out.String(), "Logged in as") {
-		t.Errorf("output = %q, want no claim that the login succeeded", out.String())
+		t.Errorf("output = %q, want no statement that the login succeeded", out.String())
 	}
 }
 
 func TestLogoutToleratesALoginAlreadyRemoved(t *testing.T) {
-	apitest.IsolateKeyStorage(t)
+	apitest.IsolateLoginKeyStorage(t)
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		t.Fatal(err)
@@ -762,9 +762,9 @@ func TestLogoutToleratesALoginAlreadyRemoved(t *testing.T) {
 	defer server.Close()
 
 	out := &bytes.Buffer{}
-	session := api.NewSession(server.URL, "test", strings.NewReader(""), out)
+	invocation := api.NewInvocation(server.URL, "test", strings.NewReader(""), out)
 
-	err = Logout(session, nil)
+	err = Logout(invocation, nil)
 
 	if err != nil {
 		t.Fatalf("error = %v, want a login already removed to be no failure", err)

@@ -17,17 +17,17 @@ import (
 )
 
 func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {
-	temporary := apitest.IsolateKeyStorage(t)
+	temporary := apitest.IsolateLoginKeyStorage(t)
 
 	if runtime.GOOS != "linux" {
-		path, err := api.KeyPath()
+		path, err := api.LoginKeyPath()
 
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		if !strings.HasPrefix(path, temporary) {
-			t.Fatalf("api.KeyPath() = %q, want it under the isolated home", path)
+			t.Fatalf("api.LoginKeyPath() = %q, want it under the isolated home", path)
 		}
 
 		return
@@ -47,18 +47,18 @@ func TestKeyPathStaysOutOfPublishedDotfiles(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("XDG_STATE_HOME", test.stateHome)
 
-			path, err := api.KeyPath()
+			path, err := api.LoginKeyPath()
 
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if path != test.wantPath {
-				t.Errorf("api.KeyPath() = %q, want %q", path, test.wantPath)
+				t.Errorf("api.LoginKeyPath() = %q, want %q", path, test.wantPath)
 			}
 
 			if strings.Contains(path, ".config") {
-				t.Errorf("api.KeyPath() = %q, must never sit in ~/.config", path)
+				t.Errorf("api.LoginKeyPath() = %q, must never sit in ~/.config", path)
 			}
 		})
 	}
@@ -89,9 +89,9 @@ func TestApiRequestBase(t *testing.T) {
 				base = api.DefaultBase
 			}
 
-			session := api.NewSession(base, "1.2.3", strings.NewReader(""), &bytes.Buffer{})
+			invocation := api.NewInvocation(base, "1.2.3", strings.NewReader(""), &bytes.Buffer{})
 
-			request, err := api.Request(session, http.MethodGet, "/login", nil)
+			request, err := api.Request(invocation, http.MethodGet, "/login", nil)
 
 			if err != nil {
 				t.Fatal(err)
@@ -111,23 +111,23 @@ func TestApiRequestBase(t *testing.T) {
 
 func TestFetchFleetsFailures(t *testing.T) {
 	tests := []struct {
-		name      string
-		loggedIn  bool
-		storedKey string
-		status    int
-		body      string
-		wantError string
+		name           string
+		loggedIn       bool
+		storedLoginKey string
+		status         int
+		body           string
+		wantError      string
 	}{
 		{name: "not logged in", wantError: "not logged in"},
-		{name: "empty key file", loggedIn: true, storedKey: "  \n", wantError: "not logged in"},
+		{name: "empty login key file", loggedIn: true, storedLoginKey: "  \n", wantError: "not logged in"},
 		{name: "server refusal", loggedIn: true, status: http.StatusServiceUnavailable, body: "fleets unavailable", wantError: "fleets unavailable"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			apitest.IsolateKeyStorage(t)
+			apitest.IsolateLoginKeyStorage(t)
 
-			session := api.Session{}
+			invocation := api.Invocation{}
 
 			if test.loggedIn {
 				mux := http.NewServeMux()
@@ -139,16 +139,16 @@ func TestFetchFleetsFailures(t *testing.T) {
 					fmt.Fprint(w, test.body)
 				})
 
-				session, _ = apitest.LoggedInSession(t, mux)
+				invocation, _ = apitest.LoggedInInvocation(t, mux)
 
-				if test.storedKey != "" {
-					path, err := api.KeyPath()
+				if test.storedLoginKey != "" {
+					path, err := api.LoginKeyPath()
 
 					if err != nil {
 						t.Fatal(err)
 					}
 
-					err = os.WriteFile(path, []byte(test.storedKey), 0o600)
+					err = os.WriteFile(path, []byte(test.storedLoginKey), 0o600)
 
 					if err != nil {
 						t.Fatal(err)
@@ -156,7 +156,7 @@ func TestFetchFleetsFailures(t *testing.T) {
 				}
 			}
 
-			_, err := api.FetchFleets(session)
+			_, err := api.FetchFleets(invocation)
 
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
@@ -184,9 +184,9 @@ func TestFetchDevicesFailures(t *testing.T) {
 				fmt.Fprint(w, test.body)
 			})
 
-			session, _ := apitest.LoggedInSession(t, mux)
+			invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-			_, err := api.FetchDevices(session)
+			_, err := api.FetchDevices(invocation)
 
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
@@ -195,14 +195,14 @@ func TestFetchDevicesFailures(t *testing.T) {
 	}
 }
 
-func TestFetchKeysFailures(t *testing.T) {
+func TestFetchFleetKeysFailures(t *testing.T) {
 	tests := []struct {
 		name      string
 		status    int
 		body      string
 		wantError string
 	}{
-		{name: "server refusal", status: http.StatusServiceUnavailable, body: "keys unavailable", wantError: "keys unavailable"},
+		{name: "server refusal", status: http.StatusServiceUnavailable, body: "fleet keys unavailable", wantError: "fleet keys unavailable"},
 		{name: "undecodable body", status: http.StatusOK, body: `{`, wantError: "could not be read"},
 		{name: "a refusal carrying control characters", status: http.StatusServiceUnavailable, body: "\x1b[2Kgone", wantError: `\x1b[2Kgone`},
 	}
@@ -215,9 +215,9 @@ func TestFetchKeysFailures(t *testing.T) {
 				fmt.Fprint(w, test.body)
 			})
 
-			session, _ := apitest.LoggedInSession(t, mux)
+			invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-			_, err := api.FetchKeys(session)
+			_, err := api.FetchFleetKeys(invocation)
 
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("error = %v, want it to mention %q", err, test.wantError)
@@ -244,9 +244,9 @@ func TestFetchBalancesFailures(t *testing.T) {
 				fmt.Fprint(w, test.body)
 			})
 
-			session, _ := apitest.LoggedInSession(t, mux)
+			invocation, _ := apitest.LoggedInInvocation(t, mux)
 
-			_, err := api.FetchBalances(session)
+			_, err := api.FetchBalances(invocation)
 
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("error = %v, want it to mention %q", err, test.wantError)

@@ -14,7 +14,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func Balance(session api.Session, arguments []string) error {
+func Balance(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
@@ -33,7 +33,7 @@ func Balance(session api.Session, arguments []string) error {
 		chosenFleetId = parsed
 	}
 
-	fleets, err := api.FetchFleets(session)
+	fleets, err := api.FetchFleets(invocation)
 
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func Balance(session api.Session, arguments []string) error {
 		}
 	}
 
-	fetched, err := api.FetchBalances(session)
+	fetched, err := api.FetchBalances(invocation)
 
 	if err != nil {
 		return err
@@ -66,16 +66,16 @@ func Balance(session api.Session, arguments []string) error {
 	}
 
 	if jsonOutput {
-		err = json.NewEncoder(session.Out).Encode(balances)
+		err = json.NewEncoder(invocation.Out).Encode(balances)
 
 		return err
 	}
 
 	if len(balances) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Fprintln(session.Out, "No fleets yet. Create one with fleet create.")
+			fmt.Fprintln(invocation.Out, "No fleets yet. Create one with fleet create.")
 		} else {
-			fmt.Fprintln(session.Out, "No credit on that fleet yet.")
+			fmt.Fprintln(invocation.Out, "No credit on that fleet yet.")
 		}
 
 		return nil
@@ -101,16 +101,16 @@ func Balance(session api.Session, arguments []string) error {
 		nameWidth = max(nameWidth, len(nameValues[index]))
 	}
 
-	fmt.Fprintf(session.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
+	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
 
 	for index, balance := range balances {
-		fmt.Fprintf(session.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, nameValues[index], amountValues[index])
+		fmt.Fprintf(invocation.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, nameValues[index], amountValues[index])
 	}
 
 	return nil
 }
 
-func Topup(session api.Session, arguments []string) error {
+func TopUp(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 {
 		return errors.New("account topup takes a fleet id")
 	}
@@ -121,17 +121,17 @@ func Topup(session api.Session, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodPost,
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
 		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/topup", nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -150,34 +150,34 @@ func Topup(session api.Session, arguments []string) error {
 		return errors.New("could not open the top-up page, try again")
 	}
 
-	fmt.Fprintf(session.Out, "Open this link to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the top-up completes.\nPress enter to open the browser.\n", api.Printable(opened.Url))
+	fmt.Fprintf(invocation.Out, "Open this page to choose an amount and pay:\n\n  %s\n\nThe credit appears on the balance once the top-up completes.\nPress enter to open the browser.\n", api.Printable(opened.Url))
 
-	_, err = bufio.NewReader(session.In).ReadString('\n')
+	_, err = bufio.NewReader(invocation.In).ReadString('\n')
 
 	if err != nil {
 		return nil
 	}
 
-	session.OpenBrowser(opened.Url)
+	invocation.OpenBrowser(opened.Url)
 
 	return nil
 }
 
-func Delete(session api.Session, arguments []string) error {
+func Delete(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 0 {
 		return errors.New("account delete takes no arguments")
 	}
 
-	request, err := api.AuthenticatedRequest(session, http.MethodGet, "/fleets", nil)
+	request, err := api.AuthenticatedRequest(invocation, http.MethodGet, "/fleets", nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err := session.Client.Do(request)
+	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	if response.StatusCode != http.StatusOK {
@@ -190,27 +190,27 @@ func Delete(session api.Session, arguments []string) error {
 
 	response.Body.Close()
 
-	fmt.Fprint(session.Out, "Delete your account, its logins, and your access to every fleet? This cannot be undone. [y/N] ")
+	fmt.Fprint(invocation.Out, "Delete your account, its logins, and your access to every fleet? This cannot be undone. [y/N] ")
 
-	answer, _ := bufio.NewReader(session.In).ReadString('\n')
+	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
 	answer = strings.ToLower(strings.TrimSpace(answer))
 
 	if answer != "y" && answer != "yes" {
-		fmt.Fprintln(session.Out, "Nothing deleted.")
+		fmt.Fprintln(invocation.Out, "Nothing deleted.")
 		return nil
 	}
 
-	request, err = api.AuthenticatedRequest(session, http.MethodDelete, "/account", nil)
+	request, err = api.AuthenticatedRequest(invocation, http.MethodDelete, "/account", nil)
 
 	if err != nil {
 		return err
 	}
 
-	response, err = session.Client.Do(request)
+	response, err = invocation.Client.Do(request)
 
 	if err != nil {
-		return errors.New("the server could not be reached, check your connection")
+		return errors.New("the server could not be reached, check your internet access")
 	}
 
 	defer response.Body.Close()
@@ -219,9 +219,9 @@ func Delete(session api.Session, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintln(session.Out, "Account deleted.")
+	fmt.Fprintln(invocation.Out, "Account deleted.")
 
-	path, err := api.KeyPath()
+	path, err := api.LoginKeyPath()
 
 	if err != nil {
 		return err
