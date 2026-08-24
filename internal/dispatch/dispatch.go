@@ -178,7 +178,5 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 		return fmt.Errorf("%s is not available yet", entry.Name)
 	}
 
-	err := entry.Run(invocation, rest)
-
-	return err
+	return entry.Run(invocation, rest)
 }

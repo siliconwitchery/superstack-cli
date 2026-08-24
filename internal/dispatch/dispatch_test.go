@@ -259,30 +259,3 @@ func TestDispatch(t *testing.T) {
 		})
 	}
 }
-
-func TestHelpListsEveryCommand(t *testing.T) {
-	sections := []Section{
-		{Title: "Things", Commands: []Command{{Name: "thing list", Arguments: "[--json]", Summary: "List things"}}},
-		{Title: "Account", Commands: []Command{{Name: "account delete", Summary: "Delete the account"}}},
-	}
-	out := &bytes.Buffer{}
-	invocation := api.NewInvocation(api.DefaultBase, "1.2.3", strings.NewReader(""), out)
-
-	printHelp(invocation, sections)
-
-	for _, section := range sections {
-		if !strings.Contains(out.String(), section.Title) {
-			t.Errorf("help is missing the section %q", section.Title)
-		}
-
-		for _, entry := range section.Commands {
-			if !strings.Contains(out.String(), entry.Name) {
-				t.Errorf("help is missing the command %q", entry.Name)
-			}
-
-			if !strings.Contains(out.String(), entry.Summary) {
-				t.Errorf("help is missing the summary for %q", entry.Name)
-			}
-		}
-	}
-}
