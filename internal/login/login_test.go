@@ -150,7 +150,7 @@ func fakeSuperstack(t *testing.T, providersRefusal string, loginAnswer string) (
 			return
 		}
 
-		fmt.Fprint(w, `{"key": "ssk_test", "email": "someone@example.com"}`)
+		fmt.Fprint(w, `{"login_key": "ssk_test", "email": "someone@example.com"}`)
 	})
 
 	server := httptest.NewServer(mux)
@@ -210,7 +210,7 @@ func TestLogin(t *testing.T) {
 			name:        "superstack returns an empty login key",
 			provider:    "github",
 			pollAnswers: []string{`{"access_token":"gho_test"}`},
-			loginAnswer: `{"key":"","email":"someone@example.com"}`,
+			loginAnswer: `{"login_key":"","email":"someone@example.com"}`,
 			wantError:   "the login did not complete",
 		},
 		{
