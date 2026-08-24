@@ -13,7 +13,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/member"
 )
 
-const version = "0.0.3"
+const version = "0.0.4"
 
 var sections = []dispatch.Section{
 	{
