@@ -14,83 +14,6 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
-func Pair(invocation api.Invocation, arguments []string) error {
-	if len(arguments) != 2 && len(arguments) != 3 {
-		return errors.New("device pair takes an IMEI, a fleet id, and an optional name")
-	}
-
-	imei := arguments[0]
-
-	if !validImei(imei) {
-		return errors.New("the IMEI is the 15-digit number printed on the device")
-	}
-
-	fleetId, err := strconv.ParseInt(arguments[1], 10, 64)
-
-	if err != nil || fleetId < 1 {
-		return errors.New("the fleet id is the number shown by fleet list")
-	}
-
-	fleets, err := api.FetchFleets(invocation)
-
-	if err != nil {
-		return err
-	}
-
-	fleetName := ""
-
-	for _, fleet := range fleets {
-		if fleet.Id == fleetId {
-			fleetName = fleet.Name
-		}
-	}
-
-	if fleetName == "" {
-		return errors.New("no such fleet")
-	}
-
-	fmt.Fprintln(invocation.Out, "Press the pairing button on the device to finish pairing it.")
-
-	payload := map[string]string{"imei": imei}
-
-	if len(arguments) == 3 {
-		payload["name"] = arguments[2]
-	}
-
-	body, err := json.Marshal(payload)
-
-	if err != nil {
-		return err
-	}
-
-	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
-		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/devices", bytes.NewReader(body))
-
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	pairingClient := &http.Client{Timeout: 90 * time.Second}
-
-	response, err := pairingClient.Do(request)
-
-	if err != nil {
-		return errors.New("the server could not be reached, check your internet access")
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusNoContent {
-		return api.ServerError(response)
-	}
-
-	fmt.Fprintf(invocation.Out, "Paired device %s with fleet %q.\n", imei, fleetName)
-
-	return nil
-}
-
 func List(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
@@ -150,7 +73,7 @@ func List(invocation api.Invocation, arguments []string) error {
 
 	if len(filtered) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Fprintln(invocation.Out, "No devices yet. Pair one with device pair.")
+			fmt.Fprintln(invocation.Out, "No devices yet.")
 		} else {
 			fmt.Fprintln(invocation.Out, "No devices in that fleet.")
 		}
@@ -161,13 +84,9 @@ func List(invocation api.Invocation, arguments []string) error {
 	imeiWidth := len("IMEI")
 	nameWidth := len("NAME")
 	fleetWidth := len("FLEET")
-	runStateWidth := len("RUN STATE")
-	storageWidth := len("STORAGE")
 	imeiValues := make([]string, len(filtered))
 	nameValues := make([]string, len(filtered))
 	fleetValues := make([]string, len(filtered))
-	runStateValues := make([]string, len(filtered))
-	storageValues := make([]string, len(filtered))
 	lastSeenValues := make([]string, len(filtered))
 
 	for index, device := range filtered {
@@ -200,36 +119,6 @@ func List(invocation api.Invocation, arguments []string) error {
 			}
 		}
 
-		runState := "unknown"
-
-		if device.RunState != nil {
-			switch *device.RunState {
-			case 2:
-				runState = "running"
-			case 3:
-				runState = "stopped"
-			case 4:
-				runState = "crashed"
-			}
-		}
-
-		storage := "-"
-
-		if device.StorageUsed != nil && device.StorageTotal != nil {
-			formatBytes := func(bytes int64) string {
-				switch {
-				case bytes < 1000:
-					return fmt.Sprintf("%d B", bytes)
-				case bytes < 1000*1000:
-					return fmt.Sprintf("%.1f kB", float64(bytes)/1000)
-				default:
-					return fmt.Sprintf("%.1f MB", float64(bytes)/(1000*1000))
-				}
-			}
-
-			storage = fmt.Sprintf("%s of %s", formatBytes(*device.StorageUsed), formatBytes(*device.StorageTotal))
-		}
-
 		fleetName, known := fleetNames[device.FleetId]
 
 		if !known {
@@ -239,24 +128,19 @@ func List(invocation api.Invocation, arguments []string) error {
 		imeiValues[index] = api.Printable(device.Imei)
 		nameValues[index] = api.Printable(name)
 		fleetValues[index] = api.Printable(fleetName)
-		runStateValues[index] = runState
-		storageValues[index] = storage
 		lastSeenValues[index] = lastSeen
 		imeiWidth = max(imeiWidth, len(imeiValues[index]))
 		nameWidth = max(nameWidth, len(nameValues[index]))
 		fleetWidth = max(fleetWidth, len(fleetValues[index]))
-		runStateWidth = max(runStateWidth, len(runStateValues[index]))
-		storageWidth = max(storageWidth, len(storageValues[index]))
 	}
 
-	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
-		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET",
-		runStateWidth, "RUN STATE", storageWidth, "STORAGE", "LAST SEEN")
+	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %s\n",
+		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET", "LAST SEEN")
 
 	for index := range filtered {
-		fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
+		fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %s\n",
 			imeiWidth, imeiValues[index], nameWidth, nameValues[index], fleetWidth, fleetValues[index],
-			runStateWidth, runStateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
+			lastSeenValues[index])
 	}
 
 	return nil
@@ -365,7 +249,7 @@ func Unpair(invocation api.Invocation, arguments []string) error {
 		return errors.New("no such device, device list shows yours")
 	}
 
-	fmt.Fprintf(invocation.Out, "Unpair device %q from fleet %q? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] ", label, fleetName)
+	fmt.Fprintf(invocation.Out, "Unpair device %q from fleet %q? It will no longer appear in the fleet. [y/N] ", label, fleetName)
 
 	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 

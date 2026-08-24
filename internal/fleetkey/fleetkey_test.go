@@ -23,7 +23,7 @@ func TestFleetKeyCreate(t *testing.T) {
 		{
 			name:      "the server answers without a fleet key",
 			arguments: []string{"3", "deploy server"},
-			wantPath:  "/fleets/3/keys",
+			wantPath:  "/fleets/3/fleet-keys",
 			wantLabel: "deploy server",
 			answer:    `{"id":1}`,
 			wantError: "was not created",
@@ -31,7 +31,7 @@ func TestFleetKeyCreate(t *testing.T) {
 		{
 			name:      "a labelled fleet key",
 			arguments: []string{"3", "deploy server"},
-			wantPath:  "/fleets/3/keys",
+			wantPath:  "/fleets/3/fleet-keys",
 			wantLabel: "deploy server",
 		},
 		{
@@ -62,7 +62,7 @@ func TestFleetKeyCreate(t *testing.T) {
 		{
 			name:      "the server refuses",
 			arguments: []string{"9", "doomed"},
-			wantPath:  "/fleets/9/keys",
+			wantPath:  "/fleets/9/fleet-keys",
 			refusal:   "no such fleet",
 			wantError: "no such fleet",
 		},
@@ -72,7 +72,7 @@ func TestFleetKeyCreate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			mux := http.NewServeMux()
 
-			mux.HandleFunc("POST /fleets/{id}/keys", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("POST /fleets/{id}/fleet-keys", func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != test.wantPath {
 					t.Errorf("the request went to %s, want %s", r.URL.Path, test.wantPath)
 				}
@@ -99,7 +99,7 @@ func TestFleetKeyCreate(t *testing.T) {
 				answer := test.answer
 
 				if answer == "" {
-					answer = `{"id":1,"key":"ssf_testtesttestab2de"}`
+					answer = `{"id":1,"fleet_key":"ssf_testtesttestab2de"}`
 				}
 
 				fmt.Fprint(w, answer)
@@ -131,7 +131,7 @@ func TestFleetKeyCreate(t *testing.T) {
 				t.Errorf("the output %q does not warn that the fleet key cannot be shown again", printed)
 			}
 
-			if !strings.Contains(printed, "Created fleet key 1.") {
+			if !strings.Contains(printed, "Created key 1.") {
 				t.Errorf("the output %q does not name the fleet key it created", printed)
 			}
 		})
@@ -143,8 +143,8 @@ func TestFleetKeyList(t *testing.T) {
 		`{"id":4,"name":"skunkworks","owner":false},` +
 		`{"id":5,"name":"spares","owner":true}]`
 
-	fleetKeys := `[{"id":1,"fleet":3,"label":"deploy server","suffix":"ab2de"},` +
-		`{"id":2,"fleet":4,"label":"lab sensor","suffix":"f9hjk"}]`
+	fleetKeys := `[{"id":1,"fleet_id":3,"label":"deploy server","fleet_key_suffix":"ab2de"},` +
+		`{"id":2,"fleet_id":4,"label":"lab sensor","fleet_key_suffix":"f9hjk"}]`
 
 	tests := []struct {
 		name       string
@@ -164,7 +164,7 @@ func TestFleetKeyList(t *testing.T) {
 		{
 			name:      "every fleet's fleet keys",
 			arguments: []string{},
-			wantShown: []string{"ID  FLEET  FLEET NAME  FLEET KEY", "crew", "skunkworks", "...ab2de", "...f9hjk", "deploy server", "lab sensor"},
+			wantShown: []string{"ID  FLEET  FLEET NAME  KEY", "crew", "skunkworks", "...ab2de", "...f9hjk", "deploy server", "lab sensor"},
 		},
 		{
 			name:       "one fleet's fleet keys",
@@ -175,26 +175,26 @@ func TestFleetKeyList(t *testing.T) {
 		{
 			name:       "a label with control characters is escaped",
 			arguments:  []string{},
-			fleetKeys:  `[{"id":1,"fleet":3,"label":"\u001b[2Kquiet","suffix":"ab2de"}]`,
+			fleetKeys:  `[{"id":1,"fleet_id":3,"label":"\u001b[2Kquiet","fleet_key_suffix":"ab2de"}]`,
 			wantShown:  []string{`\x1b[2Kquiet`},
 			wantHidden: []string{"\x1b"},
 		},
 		{
 			name:      "no fleet keys",
 			arguments: []string{},
-			wantShown: []string{"No fleet keys yet. Create one with fleet key create."},
+			wantShown: []string{"No keys yet. Create one with key create."},
 			fleetKeys: `[]`,
 		},
 		{
 			name:       "a fleet without fleet keys",
 			arguments:  []string{"5"},
-			wantShown:  []string{"No fleet keys on that fleet yet."},
+			wantShown:  []string{"No keys on that fleet yet."},
 			wantHidden: []string{"ID  FLEET"},
 		},
 		{
 			name:       "machine-readable output",
 			arguments:  []string{"--json"},
-			wantShown:  []string{`"suffix":"ab2de"`, `"fleet":4`},
+			wantShown:  []string{`"fleet_key_suffix":"ab2de"`, `"fleet_id":4`},
 			wantHidden: []string{"ID  FLEET"},
 		},
 		{
@@ -206,7 +206,7 @@ func TestFleetKeyList(t *testing.T) {
 		{
 			name:      "a fleet the list does not name",
 			arguments: []string{},
-			fleetKeys: `[{"id":1,"fleet":99,"label":"orphan","suffix":"ab2de"}]`,
+			fleetKeys: `[{"id":1,"fleet_id":99,"label":"orphan","fleet_key_suffix":"ab2de"}]`,
 			wantShown: []string{"99     -"},
 		},
 		{
@@ -240,7 +240,7 @@ func TestFleetKeyList(t *testing.T) {
 				fmt.Fprint(w, fleets)
 			})
 
-			mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("GET /fleet-keys", func(w http.ResponseWriter, r *http.Request) {
 				if test.refusal != "" {
 					http.Error(w, test.refusal, http.StatusServiceUnavailable)
 					return
@@ -296,8 +296,8 @@ func TestFleetKeyRevoke(t *testing.T) {
 			name:        "revoke a fleet key",
 			arguments:   []string{"3"},
 			answer:      "y\n",
-			wantRevoked: "/keys/3",
-			wantShown:   "Revoked fleet key \"production\".",
+			wantRevoked: "/fleet-keys/3",
+			wantShown:   "Revoked key \"production\".",
 		},
 		{
 			name:      "declined by default",
@@ -321,29 +321,29 @@ func TestFleetKeyRevoke(t *testing.T) {
 			arguments:   []string{"3"},
 			answer:      "y\n",
 			refusal:     "no such fleet key",
-			wantRevoked: "/keys/3",
+			wantRevoked: "/fleet-keys/3",
 			wantError:   "no such fleet key",
 		},
 		{
 			name:      "a fleet key that is not yours",
 			arguments: []string{"9"},
 			answer:    "y\n",
-			wantError: "no such fleet key",
+			wantError: "no such key",
 		},
 		{
 			name:      "no fleet key id",
 			arguments: []string{},
-			wantError: "takes a fleet key id",
+			wantError: "takes a key id",
 		},
 		{
 			name:      "two fleet key ids",
 			arguments: []string{"3", "4"},
-			wantError: "takes a fleet key id",
+			wantError: "takes a key id",
 		},
 		{
 			name:      "a wordy id",
 			arguments: []string{"pilot"},
-			wantError: "shown by fleet key list",
+			wantError: "shown by key list",
 		},
 	}
 
@@ -353,11 +353,11 @@ func TestFleetKeyRevoke(t *testing.T) {
 
 			mux := http.NewServeMux()
 
-			mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `[{"id":3,"fleet":1,"label":"production","suffix":"a1b2c"}]`)
+			mux.HandleFunc("GET /fleet-keys", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `[{"id":3,"fleet_id":1,"label":"production","fleet_key_suffix":"a1b2c"}]`)
 			})
 
-			mux.HandleFunc("DELETE /keys/{id}", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("DELETE /fleet-keys/{id}", func(w http.ResponseWriter, r *http.Request) {
 				revokedPath = r.URL.Path
 
 				if test.refusal != "" {

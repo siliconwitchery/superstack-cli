@@ -210,7 +210,7 @@ func TestFetchFleetKeysFailures(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mux := http.NewServeMux()
-			mux.HandleFunc("GET /keys", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("GET /fleet-keys", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(test.status)
 				fmt.Fprint(w, test.body)
 			})

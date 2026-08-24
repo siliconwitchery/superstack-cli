@@ -6,14 +6,14 @@ import (
 )
 
 type FleetKeyEntry struct {
-	Id     int64  `json:"id"`
-	Fleet  int64  `json:"fleet"`
-	Label  string `json:"label"`
-	Suffix string `json:"suffix"`
+	Id             int64  `json:"id"`
+	FleetId        int64  `json:"fleet_id"`
+	Label          string `json:"label"`
+	FleetKeySuffix string `json:"fleet_key_suffix"`
 }
 
 func FetchFleetKeys(invocation Invocation) ([]FleetKeyEntry, error) {
-	request, err := AuthenticatedRequest(invocation, http.MethodGet, "/keys", nil)
+	request, err := AuthenticatedRequest(invocation, http.MethodGet, "/fleet-keys", nil)
 
 	if err != nil {
 		return nil, err

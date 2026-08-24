@@ -12,159 +12,11 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api/apitest"
 )
 
-func TestDevicePair(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		message    string
-		wantOutput string
-		wantError  string
-	}{
-		{
-			name:       "button pressed",
-			statusCode: http.StatusNoContent,
-			wantOutput: "Press the pairing button on the device to finish pairing it.\nPaired device 354820091234567 with fleet \"pilot\".\n",
-		},
-		{
-			name:       "button not pressed",
-			statusCode: http.StatusRequestTimeout,
-			message:    "the button was not pressed in time",
-			wantOutput: "Press the pairing button on the device to finish pairing it.\n",
-			wantError:  "the button was not pressed in time",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			pairedImei := ""
-			pairedName := ""
-
-			mux := http.NewServeMux()
-			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
-			})
-			mux.HandleFunc("POST /fleets/{id}/devices", func(w http.ResponseWriter, r *http.Request) {
-				body := struct {
-					Imei string `json:"imei"`
-					Name string `json:"name"`
-				}{}
-
-				json.NewDecoder(r.Body).Decode(&body)
-				pairedImei = body.Imei
-				pairedName = body.Name
-
-				if r.Header.Get("Content-Type") != "application/json" {
-					t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
-				}
-
-				if test.message != "" {
-					http.Error(w, test.message, test.statusCode)
-
-					return
-				}
-
-				w.WriteHeader(test.statusCode)
-			})
-
-			invocation, out := apitest.LoggedInInvocation(t, mux)
-
-			err := Pair(invocation, []string{"354820091234567", "3", "roof sensor"})
-
-			printed := out.String()
-
-			if test.wantError == "" && err != nil {
-				t.Fatal(err)
-			}
-
-			if test.wantError != "" && (err == nil || err.Error() != test.wantError) {
-				t.Fatalf("error = %v, want %q", err, test.wantError)
-			}
-
-			if pairedImei != "354820091234567" || pairedName != "roof sensor" {
-				t.Errorf("the server received IMEI %q and name %q", pairedImei, pairedName)
-			}
-
-			if printed != test.wantOutput {
-				t.Errorf("output = %q, want %q", printed, test.wantOutput)
-			}
-		})
-	}
-}
-
-func TestDevicePairOmitsAnAbsentName(t *testing.T) {
-	nameWasPresent := false
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `[{"id":3,"name":"pilot","owner":true}]`)
-	})
-	mux.HandleFunc("POST /fleets/{id}/devices", func(w http.ResponseWriter, r *http.Request) {
-		body := map[string]string{}
-		json.NewDecoder(r.Body).Decode(&body)
-		_, nameWasPresent = body["name"]
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	invocation, out := apitest.LoggedInInvocation(t, mux)
-
-	err := Pair(invocation, []string{"354820091234567", "3"})
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if nameWasPresent {
-		t.Error("the request included a name although none was given")
-	}
-
-	if out.String() != "Press the pairing button on the device to finish pairing it.\nPaired device 354820091234567 with fleet \"pilot\".\n" {
-		t.Errorf("output = %q", out.String())
-	}
-}
-
-func TestDevicePairArguments(t *testing.T) {
-	tests := []struct {
-		name      string
-		arguments []string
-		wantError string
-	}{
-		{"no arguments", nil, "takes an IMEI"},
-		{"too many arguments", []string{"354820091234567", "3", "one", "two"}, "takes an IMEI"},
-		{"short IMEI", []string{"123", "3"}, "15-digit"},
-		{"non-digit IMEI", []string{"35482009123456x", "3"}, "15-digit"},
-		{"wordy fleet", []string{"354820091234567", "pilot"}, "shown by fleet list"},
-		{"zero fleet", []string{"354820091234567", "0"}, "shown by fleet list"},
-	}
-
-	for _, test := range tests {
-		err := Pair(api.Invocation{}, test.arguments)
-
-		if err == nil || !strings.Contains(err.Error(), test.wantError) {
-			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
-		}
-	}
-}
-
-func TestDevicePairUnknownFleet(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `[]`)
-	})
-
-	invocation, _ := apitest.LoggedInInvocation(t, mux)
-
-	err := Pair(invocation, []string{"354820091234567", "9"})
-
-	if err == nil || err.Error() != "no such fleet" {
-		t.Fatalf("error = %v", err)
-	}
-}
-
 func TestDeviceList(t *testing.T) {
 	now := time.Now()
-	devices := fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q,"reported_state":2,"storage_used":1240,"storage_total":57344},`+
-		`{"imei":"222222222222222","name":null,"fleet_id":4,"last_seen_at":%q,"reported_state":4,"storage_used":2500000,"storage_total":8000000},`+
-		`{"imei":"333333333333333","name":"shed","fleet_id":3,"last_seen_at":null,"reported_state":null,"storage_used":null,"storage_total":null}]`,
+	devices := fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q},`+
+		`{"imei":"222222222222222","name":null,"fleet_id":4,"last_seen_at":%q},`+
+		`{"imei":"333333333333333","name":"shed","fleet_id":3,"last_seen_at":null}]`,
 		now.Add(-time.Minute).Format(time.RFC3339), now.Add(-3*time.Hour).Format(time.RFC3339))
 	fleets := `[{"id":3,"name":"pilot","owner":true},{"id":4,"name":"workshop","owner":true},{"id":5,"name":"empty","owner":true}]`
 
@@ -179,24 +31,20 @@ func TestDeviceList(t *testing.T) {
 		fleets     string
 		refusal    string
 	}{
-		{name: "table", wantShown: []string{"IMEI             NAME  FLEET     RUN STATE  STORAGE            LAST SEEN", "roof", "pilot", "running", "1.2 kB of 57.3 kB", "just now", "-", "workshop", "crashed", "2.5 MB of 8.0 MB", "3 h ago", "unknown", "never"}},
+		{name: "table", wantShown: []string{"IMEI             NAME  FLEET     LAST SEEN", "roof", "pilot", "just now", "-", "workshop", "3 h ago", "never"}},
 		{name: "filtered", arguments: []string{"3"}, wantShown: []string{"111111111111111", "333333333333333"}, wantHidden: []string{"222222222222222", "workshop"}},
-		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`, `"run_state":2`}, wantHidden: []string{"LAST SEEN", "222222222222222", `"reported_state"`}},
+		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`, `"last_seen_at":`}, wantHidden: []string{"LAST SEEN", "222222222222222", `"reported_state"`, `"run_state"`, `"storage_used"`}},
 		{name: "empty fleet", arguments: []string{"5"}, wantExact: "No devices in that fleet.\n"},
-		{name: "no devices", devices: `[]`, fleets: `[]`, wantExact: "No devices yet. Pair one with device pair.\n"},
+		{name: "no devices", devices: `[]`, fleets: `[]`, wantExact: "No devices yet.\n"},
 		{name: "server refusal", refusal: "devices unavailable", wantError: "devices unavailable"},
 		{name: "unknown fleet", arguments: []string{"9"}, wantError: "no such fleet"},
 		{name: "two ids", arguments: []string{"3", "4"}, wantError: "takes at most one fleet id"},
 		{name: "wordy id", arguments: []string{"pilot"}, wantError: "shown by fleet list"},
-		{name: "an unreadable last seen time leaves the rest of the table", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday"}]`, wantShown: []string{"111111111111111  roof  pilot  unknown    -        unknown"}},
-		{name: "a fleet the list does not name", devices: `[{"imei":"888888888888888","name":"orphan","fleet_id":99}]`, wantShown: []string{"888888888888888  orphan  -      unknown    -        never"}},
+		{name: "an unreadable last seen time leaves the rest of the table", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday"}]`, wantShown: []string{"111111111111111  roof  pilot  unknown"}},
+		{name: "a fleet the list does not name", devices: `[{"imei":"888888888888888","name":"orphan","fleet_id":99}]`, wantShown: []string{"888888888888888  orphan  -      never"}},
 		{name: "a name with control characters is escaped", devices: `[{"imei":"111111111111111","name":"\u001b[2K\rhidden","fleet_id":3}]`, wantShown: []string{`\x1b[2K\rhidden`}, wantHidden: []string{"\x1b"}},
 		{name: "minutes ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-12*time.Minute).Format(time.RFC3339)), wantShown: []string{"12 min ago"}},
 		{name: "days ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-49*time.Hour).Format(time.RFC3339)), wantShown: []string{"2 d ago"}},
-		{name: "stopped and undefined run states", devices: `[{"imei":"444444444444444","name":"halted","fleet_id":3,"reported_state":3},{"imei":"555555555555555","name":"odd","fleet_id":3,"reported_state":1}]`, wantShown: []string{"stopped", "unknown"}},
-		{name: "byte storage", devices: `[{"imei":"666666666666666","name":"bytes","fleet_id":3,"storage_used":999,"storage_total":999}]`, wantShown: []string{"999 B of 999 B"}},
-		{name: "missing used storage", devices: `[{"imei":"777777777777777","name":"nil-used","fleet_id":3,"storage_used":null,"storage_total":57344}]`, wantShown: []string{"777777777777777  nil-used  pilot  unknown    -        never"}},
-		{name: "missing total storage", devices: `[{"imei":"888888888888888","name":"nil-total","fleet_id":3,"storage_used":1240,"storage_total":null}]`, wantShown: []string{"888888888888888  nil-total  pilot  unknown    -        never"}},
 	}
 
 	for _, test := range tests {
@@ -350,9 +198,9 @@ func TestDeviceUnpair(t *testing.T) {
 		wantOutput   string
 		wantError    string
 	}{
-		{name: "confirmed", answer: "yes\n", wantUnpaired: true, wantOutput: "Unpair device \"354820091234567\" from fleet \"pilot\"? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] Unpaired device \"354820091234567\" from fleet \"pilot\".\n"},
-		{name: "declined", answer: "n\n", wantOutput: "Unpair device \"354820091234567\" from fleet \"pilot\"? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] Nothing unpaired.\n"},
-		{name: "a named device is named back, not its IMEI", answer: "n\n", devices: `[{"imei":"354820091234567","name":"rooftop","fleet_id":3,"last_seen_at":null}]`, wantOutput: "Unpair device \"rooftop\" from fleet \"pilot\"? It wipes the device's user files and restarts Lua, and pairing it again means pressing its pairing button in person. [y/N] Nothing unpaired.\n"},
+		{name: "confirmed", answer: "yes\n", wantUnpaired: true, wantOutput: "Unpair device \"354820091234567\" from fleet \"pilot\"? It will no longer appear in the fleet. [y/N] Unpaired device \"354820091234567\" from fleet \"pilot\".\n"},
+		{name: "declined", answer: "n\n", wantOutput: "Unpair device \"354820091234567\" from fleet \"pilot\"? It will no longer appear in the fleet. [y/N] Nothing unpaired.\n"},
+		{name: "a named device is named back, not its IMEI", answer: "n\n", devices: `[{"imei":"354820091234567","name":"rooftop","fleet_id":3,"last_seen_at":null}]`, wantOutput: "Unpair device \"rooftop\" from fleet \"pilot\"? It will no longer appear in the fleet. [y/N] Nothing unpaired.\n"},
 		{name: "server refuses", answer: "y\n", refusal: "no such device", wantUnpaired: true, wantError: "no such device"},
 		{name: "device belongs to an inaccessible fleet", fleets: `[]`, wantError: "no such device, device list shows yours"},
 	}

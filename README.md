@@ -1,7 +1,7 @@
 # Superstack CLI
 
 `superstack` is the command line interface to Superstack: log in, create
-fleets, pair devices, and manage who can reach them. It is a single static
+fleets, manage devices, and control who can reach them. It is a single static
 binary for managing Superstack from a terminal.
 
 Uploading Lua code and streaming logs are not available yet.

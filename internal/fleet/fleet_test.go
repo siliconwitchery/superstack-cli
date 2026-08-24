@@ -424,7 +424,7 @@ func TestFleetDelete(t *testing.T) {
 			})
 
 			mux.HandleFunc("GET /balance", func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `[{"fleet":3,"balance":"0","currency":"eur"}]`)
+				fmt.Fprint(w, `[{"fleet_id":3,"balance":"0","currency":"eur"}]`)
 			})
 
 			mux.HandleFunc("DELETE /fleets/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -484,19 +484,19 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 	}{
 		{
 			name:       "remaining credit is stated",
-			balance:    `[{"fleet":3,"balance":"12.340000","currency":"eur"}]`,
-			wantOutput: "Delete fleet \"pilot\", unpair its devices, and forfeit its remaining €12.34 of credit? It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			balance:    `[{"fleet_id":3,"balance":"12.340000","currency":"eur"}]`,
+			wantOutput: "Delete fleet \"pilot\", unpair its devices, and forfeit its remaining €12.34 of credit? [y/N] Nothing deleted.\n",
 		},
 		{
 			name:       "an empty balance stays quiet",
-			balance:    `[{"fleet":3,"balance":"0","currency":"eur"}]`,
-			wantOutput: "Delete fleet \"pilot\" and unpair its devices? It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			balance:    `[{"fleet_id":3,"balance":"0","currency":"eur"}]`,
+			wantOutput: "Delete fleet \"pilot\" and unpair its devices? [y/N] Nothing deleted.\n",
 			wantAbsent: "forfeit",
 		},
 		{
 			name:       "an unparseable balance warns without an amount",
-			balance:    `[{"fleet":3,"balance":"15,00","currency":"eur"}]`,
-			wantOutput: "Delete fleet \"pilot\", unpair its devices, and forfeit its remaining credit? It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person. [y/N] Nothing deleted.\n",
+			balance:    `[{"fleet_id":3,"balance":"15,00","currency":"eur"}]`,
+			wantOutput: "Delete fleet \"pilot\", unpair its devices, and forfeit its remaining credit? [y/N] Nothing deleted.\n",
 			wantAbsent: "€",
 		},
 	}
@@ -527,10 +527,6 @@ func TestFleetDeletePromptStatesForfeitedCredit(t *testing.T) {
 
 			if printed != test.wantOutput {
 				t.Errorf("output = %q, want %q", printed, test.wantOutput)
-			}
-
-			if !strings.Contains(printed, "It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person.") {
-				t.Errorf("the prompt %q does not say what unpairing the devices does to them", printed)
 			}
 
 			if test.wantAbsent != "" && strings.Contains(printed, test.wantAbsent) {

@@ -8,7 +8,7 @@ import (
 )
 
 type BalanceEntry struct {
-	Fleet    int64  `json:"fleet"`
+	FleetId  int64  `json:"fleet_id"`
 	Balance  string `json:"balance"`
 	Currency string `json:"currency"`
 }
