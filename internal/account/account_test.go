@@ -28,14 +28,14 @@ func TestAccountBalance(t *testing.T) {
 			name:      "every fleet",
 			arguments: []string{},
 			fleets:    `[{"id":1,"name":"crew","owner":true},{"id":2,"name":"pilot","owner":false}]`,
-			balances:  `[{"fleet":1,"balance":"15.000000","currency":"eur"},{"fleet":2,"balance":"0","currency":"eur"}]`,
+			balances:  `[{"fleet_id":1,"balance":"15.000000","currency":"eur"},{"fleet_id":2,"balance":"0","currency":"eur"}]`,
 			wantLines: []string{"ID", "NAME", "BALANCE", "crew", "€15.00", "pilot", "€0.00"},
 		},
 		{
 			name:       "one fleet",
 			arguments:  []string{"2"},
 			fleets:     `[{"id":1,"name":"crew","owner":true},{"id":2,"name":"pilot","owner":false}]`,
-			balances:   `[{"fleet":1,"balance":"15.000000","currency":"eur"},{"fleet":2,"balance":"0","currency":"eur"}]`,
+			balances:   `[{"fleet_id":1,"balance":"15.000000","currency":"eur"},{"fleet_id":2,"balance":"0","currency":"eur"}]`,
 			wantLines:  []string{"pilot", "€0.00"},
 			wantAbsent: []string{"crew"},
 		},
@@ -43,7 +43,7 @@ func TestAccountBalance(t *testing.T) {
 			name:       "a fleet name with control characters is escaped",
 			arguments:  []string{},
 			fleets:     `[{"id":1,"name":"\u001b[2Kquiet","owner":true}]`,
-			balances:   `[{"fleet":1,"balance":"15.000000","currency":"eur"}]`,
+			balances:   `[{"fleet_id":1,"balance":"15.000000","currency":"eur"}]`,
 			wantLines:  []string{`\x1b[2Kquiet`},
 			wantAbsent: []string{"\x1b"},
 		},
@@ -51,15 +51,15 @@ func TestAccountBalance(t *testing.T) {
 			name:      "machine readable",
 			arguments: []string{"--json"},
 			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
-			balances:  `[{"fleet":1,"balance":"15.000000","currency":"eur"}]`,
-			wantExact: `[{"fleet":1,"balance":"15.000000","currency":"eur"}]` + "\n",
+			balances:  `[{"fleet_id":1,"balance":"15.000000","currency":"eur"}]`,
+			wantExact: `[{"fleet_id":1,"balance":"15.000000","currency":"eur"}]` + "\n",
 		},
 		{
 			name:      "machine readable for one fleet",
 			arguments: []string{"2", "--json"},
 			fleets:    `[{"id":1,"name":"crew","owner":true},{"id":2,"name":"pilot","owner":false}]`,
-			balances:  `[{"fleet":1,"balance":"15.000000","currency":"eur"},{"fleet":2,"balance":"0","currency":"eur"}]`,
-			wantExact: `[{"fleet":2,"balance":"0","currency":"eur"}]` + "\n",
+			balances:  `[{"fleet_id":1,"balance":"15.000000","currency":"eur"},{"fleet_id":2,"balance":"0","currency":"eur"}]`,
+			wantExact: `[{"fleet_id":2,"balance":"0","currency":"eur"}]` + "\n",
 		},
 		{
 			name:      "machine readable with no fleets",
@@ -86,7 +86,7 @@ func TestAccountBalance(t *testing.T) {
 			name:      "a fleet the list does not name",
 			arguments: []string{},
 			fleets:    `[{"id":1,"name":"crew","owner":true}]`,
-			balances:  `[{"fleet":99,"balance":"15.000000","currency":"eur"}]`,
+			balances:  `[{"fleet_id":99,"balance":"15.000000","currency":"eur"}]`,
 			wantLines: []string{"99  -"},
 		},
 		{
@@ -184,13 +184,13 @@ func TestAccountTopUp(t *testing.T) {
 			name:        "the top-up page opened on enter",
 			arguments:   []string{"3"},
 			stdin:       "\n",
-			wantPath:    "/fleets/3/topup",
+			wantPath:    "/fleets/3/top-ups",
 			wantBrowser: true,
 		},
 		{
 			name:      "the top-up page left alone",
 			arguments: []string{"3"},
-			wantPath:  "/fleets/3/topup",
+			wantPath:  "/fleets/3/top-ups",
 		},
 		{
 			name:      "no fleet id",
@@ -210,14 +210,14 @@ func TestAccountTopUp(t *testing.T) {
 		{
 			name:      "response has no url",
 			arguments: []string{"3"},
-			wantPath:  "/fleets/3/topup",
+			wantPath:  "/fleets/3/top-ups",
 			emptyBody: true,
 			wantError: "could not open the top-up page, try again",
 		},
 		{
 			name:      "the server refuses",
 			arguments: []string{"9"},
-			wantPath:  "/fleets/9/topup",
+			wantPath:  "/fleets/9/top-ups",
 			refusal:   "no such fleet",
 			wantError: "no such fleet",
 		},
@@ -227,7 +227,7 @@ func TestAccountTopUp(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			mux := http.NewServeMux()
 
-			mux.HandleFunc("POST /fleets/{id}/topup", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("POST /fleets/{id}/top-ups", func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != test.wantPath {
 					t.Errorf("the request went to %s, want %s", r.URL.Path, test.wantPath)
 				}

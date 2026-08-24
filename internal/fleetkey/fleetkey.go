@@ -15,7 +15,7 @@ import (
 
 func Create(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 || arguments[1] == "" {
-		return errors.New("fleet key create takes a fleet id and a label, quoted if it has spaces")
+		return errors.New("key create takes a fleet id and a label, quoted if it has spaces")
 	}
 
 	fleetId, err := strconv.ParseInt(arguments[0], 10, 64)
@@ -31,7 +31,7 @@ func Create(invocation api.Invocation, arguments []string) error {
 	}
 
 	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
-		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/keys", bytes.NewReader(body))
+		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/fleet-keys", bytes.NewReader(body))
 
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func Create(invocation api.Invocation, arguments []string) error {
 
 	created := struct {
 		Id       int64  `json:"id"`
-		FleetKey string `json:"key"`
+		FleetKey string `json:"fleet_key"`
 	}{}
 
 	err = api.Decode(response, &created)
@@ -63,10 +63,10 @@ func Create(invocation api.Invocation, arguments []string) error {
 	}
 
 	if created.FleetKey == "" {
-		return errors.New("the fleet key was not created, try again")
+		return errors.New("the key was not created, try again")
 	}
 
-	fmt.Fprintf(invocation.Out, "Created fleet key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, api.Printable(created.FleetKey))
+	fmt.Fprintf(invocation.Out, "Created key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, api.Printable(created.FleetKey))
 
 	return nil
 }
@@ -75,7 +75,7 @@ func List(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 
 	if len(positionals) > 1 {
-		return errors.New("fleet key list takes at most one fleet id")
+		return errors.New("key list takes at most one fleet id")
 	}
 
 	chosenFleetId := int64(0)
@@ -117,7 +117,7 @@ func List(invocation api.Invocation, arguments []string) error {
 	fleetKeys := []api.FleetKeyEntry{}
 
 	for _, fleetKey := range fetched {
-		if chosenFleetId == 0 || fleetKey.Fleet == chosenFleetId {
+		if chosenFleetId == 0 || fleetKey.FleetId == chosenFleetId {
 			fleetKeys = append(fleetKeys, fleetKey)
 		}
 	}
@@ -130,9 +130,9 @@ func List(invocation api.Invocation, arguments []string) error {
 
 	if len(fleetKeys) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Fprintln(invocation.Out, "No fleet keys yet. Create one with fleet key create.")
+			fmt.Fprintln(invocation.Out, "No keys yet. Create one with key create.")
 		} else {
-			fmt.Fprintln(invocation.Out, "No fleet keys on that fleet yet.")
+			fmt.Fprintln(invocation.Out, "No keys on that fleet yet.")
 		}
 
 		return nil
@@ -141,32 +141,32 @@ func List(invocation api.Invocation, arguments []string) error {
 	idWidth := len("ID")
 	fleetIdWidth := len("FLEET")
 	fleetNameWidth := len("FLEET NAME")
-	fleetKeyWidth := len("FLEET KEY")
+	fleetKeyWidth := len("KEY")
 	fleetNameValues := make([]string, len(fleetKeys))
 	suffixValues := make([]string, len(fleetKeys))
 	labelValues := make([]string, len(fleetKeys))
 
 	for index, fleetKey := range fleetKeys {
-		fleetName, known := fleetNames[fleetKey.Fleet]
+		fleetName, known := fleetNames[fleetKey.FleetId]
 
 		if !known {
 			fleetName = "-"
 		}
 
 		fleetNameValues[index] = api.Printable(fleetName)
-		suffixValues[index] = api.Printable(fleetKey.Suffix)
+		suffixValues[index] = api.Printable(fleetKey.FleetKeySuffix)
 		labelValues[index] = api.Printable(fleetKey.Label)
 		idWidth = max(idWidth, len(strconv.FormatInt(fleetKey.Id, 10)))
-		fleetIdWidth = max(fleetIdWidth, len(strconv.FormatInt(fleetKey.Fleet, 10)))
+		fleetIdWidth = max(fleetIdWidth, len(strconv.FormatInt(fleetKey.FleetId, 10)))
 		fleetNameWidth = max(fleetNameWidth, len(fleetNameValues[index]))
 	}
 
 	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %s\n",
-		idWidth, "ID", fleetIdWidth, "FLEET", fleetNameWidth, "FLEET NAME", fleetKeyWidth, "FLEET KEY", "LABEL")
+		idWidth, "ID", fleetIdWidth, "FLEET", fleetNameWidth, "FLEET NAME", fleetKeyWidth, "KEY", "LABEL")
 
 	for index, fleetKey := range fleetKeys {
 		fmt.Fprintf(invocation.Out, "%-*d  %-*d  %-*s  %-*s  %s\n",
-			idWidth, fleetKey.Id, fleetIdWidth, fleetKey.Fleet, fleetNameWidth, fleetNameValues[index],
+			idWidth, fleetKey.Id, fleetIdWidth, fleetKey.FleetId, fleetNameWidth, fleetNameValues[index],
 			fleetKeyWidth, "..."+suffixValues[index], labelValues[index])
 	}
 
@@ -175,13 +175,13 @@ func List(invocation api.Invocation, arguments []string) error {
 
 func Revoke(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 1 {
-		return errors.New("fleet key revoke takes a fleet key id")
+		return errors.New("key revoke takes a key id")
 	}
 
 	fleetKeyId, err := strconv.ParseInt(arguments[0], 10, 64)
 
 	if err != nil || fleetKeyId < 1 {
-		return errors.New("the fleet key id is the number shown by fleet key list")
+		return errors.New("the key id is the number shown by key list")
 	}
 
 	fleetKeys, err := api.FetchFleetKeys(invocation)
@@ -201,10 +201,10 @@ func Revoke(invocation api.Invocation, arguments []string) error {
 	}
 
 	if !found {
-		return errors.New("no such fleet key")
+		return errors.New("no such key")
 	}
 
-	fmt.Fprintf(invocation.Out, "Revoke fleet key %q? Anything still using it stops reaching the fleet. [y/N] ", label)
+	fmt.Fprintf(invocation.Out, "Revoke key %q? Anything still using it stops reaching the fleet. [y/N] ", label)
 
 	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
@@ -216,7 +216,7 @@ func Revoke(invocation api.Invocation, arguments []string) error {
 	}
 
 	request, err := api.AuthenticatedRequest(invocation, http.MethodDelete,
-		"/keys/"+strconv.FormatInt(fleetKeyId, 10), nil)
+		"/fleet-keys/"+strconv.FormatInt(fleetKeyId, 10), nil)
 
 	if err != nil {
 		return err
@@ -234,7 +234,7 @@ func Revoke(invocation api.Invocation, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(invocation.Out, "Revoked fleet key %q.\n", label)
+	fmt.Fprintf(invocation.Out, "Revoked key %q.\n", label)
 
 	return nil
 }

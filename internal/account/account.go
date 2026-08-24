@@ -60,7 +60,7 @@ func Balance(invocation api.Invocation, arguments []string) error {
 	balances := []api.BalanceEntry{}
 
 	for _, balance := range fetched {
-		if chosenFleetId == 0 || balance.Fleet == chosenFleetId {
+		if chosenFleetId == 0 || balance.FleetId == chosenFleetId {
 			balances = append(balances, balance)
 		}
 	}
@@ -87,7 +87,7 @@ func Balance(invocation api.Invocation, arguments []string) error {
 	amountValues := make([]string, len(balances))
 
 	for index, balance := range balances {
-		name, known := fleetNames[balance.Fleet]
+		name, known := fleetNames[balance.FleetId]
 
 		if !known {
 			name = "-"
@@ -97,14 +97,14 @@ func Balance(invocation api.Invocation, arguments []string) error {
 
 		nameValues[index] = api.Printable(name)
 		amountValues[index] = api.Printable(formatted)
-		idWidth = max(idWidth, len(strconv.FormatInt(balance.Fleet, 10)))
+		idWidth = max(idWidth, len(strconv.FormatInt(balance.FleetId, 10)))
 		nameWidth = max(nameWidth, len(nameValues[index]))
 	}
 
 	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %s\n", idWidth, "ID", nameWidth, "NAME", "BALANCE")
 
 	for index, balance := range balances {
-		fmt.Fprintf(invocation.Out, "%-*d  %-*s  %s\n", idWidth, balance.Fleet, nameWidth, nameValues[index], amountValues[index])
+		fmt.Fprintf(invocation.Out, "%-*d  %-*s  %s\n", idWidth, balance.FleetId, nameWidth, nameValues[index], amountValues[index])
 	}
 
 	return nil
@@ -122,7 +122,7 @@ func TopUp(invocation api.Invocation, arguments []string) error {
 	}
 
 	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
-		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/topup", nil)
+		"/fleets/"+strconv.FormatInt(fleetId, 10)+"/top-ups", nil)
 
 	if err != nil {
 		return err

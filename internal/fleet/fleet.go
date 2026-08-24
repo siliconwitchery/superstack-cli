@@ -275,7 +275,7 @@ func Delete(invocation api.Invocation, arguments []string) error {
 	forfeitUnknown := false
 
 	for _, balance := range balances {
-		if balance.Fleet != fleetId {
+		if balance.FleetId != fleetId {
 			continue
 		}
 
@@ -291,14 +291,12 @@ func Delete(invocation api.Invocation, arguments []string) error {
 		}
 	}
 
-	consequence := "It wipes their user files and restarts Lua, and pairing one again means pressing its pairing button in person."
-
 	if forfeitUnknown {
-		fmt.Fprintf(invocation.Out, "Delete fleet %q, unpair its devices, and forfeit its remaining credit? %s [y/N] ", name, consequence)
+		fmt.Fprintf(invocation.Out, "Delete fleet %q, unpair its devices, and forfeit its remaining credit? [y/N] ", name)
 	} else if forfeited == "" {
-		fmt.Fprintf(invocation.Out, "Delete fleet %q and unpair its devices? %s [y/N] ", name, consequence)
+		fmt.Fprintf(invocation.Out, "Delete fleet %q and unpair its devices? [y/N] ", name)
 	} else {
-		fmt.Fprintf(invocation.Out, "Delete fleet %q, unpair its devices, and forfeit its remaining %s of credit? %s [y/N] ", name, forfeited, consequence)
+		fmt.Fprintf(invocation.Out, "Delete fleet %q, unpair its devices, and forfeit its remaining %s of credit? [y/N] ", name, forfeited)
 	}
 
 	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')

@@ -36,10 +36,9 @@ var sections = []dispatch.Section{
 	{
 		Title: "Devices",
 		Commands: []dispatch.Command{
-			{Name: "device pair", Arguments: "<imei> <fleet_id> [name]", Summary: "Pair a device with a fleet using its pairing button", Run: device.Pair},
-			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices, their run state, and when they were last seen", Run: device.List},
+			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices and when they were last seen", Run: device.List},
 			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: device.Rename},
-			{Name: "device unpair", Arguments: "<imei>", Summary: "Unpair a device, wipe its user files, and restart Lua", Run: device.Unpair},
+			{Name: "device unpair", Arguments: "<imei>", Summary: "Remove a device from its fleet", Run: device.Unpair},
 			{Name: "device start", Arguments: "<imei>", Summary: "Start the code on a device"},
 			{Name: "device stop", Arguments: "<imei>", Summary: "Stop the code on a device"},
 			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on a device"},
@@ -68,11 +67,11 @@ var sections = []dispatch.Section{
 		},
 	},
 	{
-		Title: "Fleet keys",
+		Title: "Keys",
 		Commands: []dispatch.Command{
-			{Name: "fleet key create", Arguments: "<fleet_id> <label>", Summary: "Create a fleet key for sending data to the fleet", Run: fleetkey.Create},
-			{Name: "fleet key list", Arguments: "[fleet_id] [--json]", Summary: "List the fleet keys that can reach your fleets", Run: fleetkey.List},
-			{Name: "fleet key revoke", Arguments: "<fleet_key_id>", Summary: "Stop a fleet key from reaching its fleet", Run: fleetkey.Revoke},
+			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a key for sending data to a fleet", Run: fleetkey.Create},
+			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the keys that can reach your fleets", Run: fleetkey.List},
+			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a key from reaching its fleet", Run: fleetkey.Revoke},
 		},
 	},
 	{

@@ -242,7 +242,7 @@ func Login(invocation api.Invocation, arguments []string) error {
 	}
 
 	login := struct {
-		LoginKey string `json:"key"`
+		LoginKey string `json:"login_key"`
 		Email    string `json:"email"`
 	}{}
 
