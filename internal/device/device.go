@@ -209,7 +209,8 @@ func Pair(invocation api.Invocation, arguments []string) error {
 
 	fmt.Fprintln(invocation.Out, "Press the pairing button on the device.")
 
-	deadline := time.Now().Add(2 * time.Minute)
+	// The server holds the pairing open for one minute.
+	deadline := time.Now().Add(75 * time.Second)
 
 	for {
 		time.Sleep(2 * time.Second)
