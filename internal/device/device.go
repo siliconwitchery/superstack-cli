@@ -14,6 +14,83 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
+func Pair(invocation api.Invocation, arguments []string) error {
+	if len(arguments) < 2 || len(arguments) > 3 {
+		return errors.New("device pair takes an IMEI, a fleet id, and an optional name")
+	}
+
+	imei := arguments[0]
+
+	if !validImei(imei) {
+		return errors.New("the IMEI is the 15-digit number printed on the device")
+	}
+
+	fleetID, err := strconv.ParseInt(arguments[1], 10, 64)
+
+	if err != nil || fleetID < 1 {
+		return errors.New("the fleet id is the number shown by fleet list")
+	}
+
+	requestBody := struct {
+		IMEI string  `json:"imei"`
+		Name *string `json:"name,omitempty"`
+	}{
+		IMEI: imei,
+	}
+
+	label := imei
+
+	if len(arguments) == 3 {
+		name := strings.TrimSpace(arguments[2])
+
+		if name == "" {
+			return errors.New("the optional device name cannot be empty")
+		}
+
+		requestBody.Name = &name
+		label = name
+	}
+
+	body, err := json.Marshal(requestBody)
+
+	if err != nil {
+		return err
+	}
+
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost,
+		"/fleets/"+strconv.FormatInt(fleetID, 10)+"/devices", bytes.NewReader(body))
+
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+
+	fmt.Fprintf(invocation.Out, "Press the pairing button on device %q.\n", label)
+
+	client := *invocation.Client
+
+	if client.Timeout > 0 && client.Timeout < 65*time.Second {
+		client.Timeout = 65 * time.Second
+	}
+
+	response, err := client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your internet access")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		return api.ServerError(response)
+	}
+
+	fmt.Fprintf(invocation.Out, "Paired device %q with fleet %d.\n", label, fleetID)
+
+	return nil
+}
+
 func List(invocation api.Invocation, arguments []string) error {
 	positionals, jsonOutput := api.TakeJsonFlag(arguments)
 

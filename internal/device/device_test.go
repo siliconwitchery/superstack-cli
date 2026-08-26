@@ -107,6 +107,105 @@ func TestDeviceList(t *testing.T) {
 	}
 }
 
+func TestDevicePair(t *testing.T) {
+	tests := []struct {
+		name       string
+		arguments  []string
+		wantBody   string
+		wantOutput string
+	}{
+		{
+			name:       "without a name",
+			arguments:  []string{"354820091234567", "3"},
+			wantBody:   `{"imei":"354820091234567"}`,
+			wantOutput: "Press the pairing button on device \"354820091234567\".\nPaired device \"354820091234567\" with fleet 3.\n",
+		},
+		{
+			name:       "with a name",
+			arguments:  []string{"354820091234567", "3", "  rooftop  "},
+			wantBody:   `{"imei":"354820091234567","name":"rooftop"}`,
+			wantOutput: "Press the pairing button on device \"rooftop\".\nPaired device \"rooftop\" with fleet 3.\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			body := ""
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /fleets/3/devices", func(w http.ResponseWriter, r *http.Request) {
+				decoded := map[string]any{}
+
+				if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+					t.Fatal(err)
+				}
+
+				encoded, err := json.Marshal(decoded)
+
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				body = string(encoded)
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			invocation, out := apitest.LoggedInInvocation(t, mux)
+
+			err := Pair(invocation, test.arguments)
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if body != test.wantBody {
+				t.Errorf("body = %q, want %q", body, test.wantBody)
+			}
+
+			if out.String() != test.wantOutput {
+				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
+			}
+		})
+	}
+}
+
+func TestDevicePairArgumentsAndRefusal(t *testing.T) {
+	tests := []struct {
+		name      string
+		arguments []string
+		wantError string
+	}{
+		{"no arguments", nil, "takes an IMEI"},
+		{"one argument", []string{"354820091234567"}, "takes an IMEI"},
+		{"four arguments", []string{"354820091234567", "3", "roof", "extra"}, "takes an IMEI"},
+		{"short IMEI", []string{"123", "3"}, "15-digit"},
+		{"non-digit IMEI", []string{"35482009123456x", "3"}, "15-digit"},
+		{"zero fleet id", []string{"354820091234567", "0"}, "fleet id"},
+		{"unreadable fleet id", []string{"354820091234567", "crew"}, "fleet id"},
+		{"empty name", []string{"354820091234567", "3", "  "}, "cannot be empty"},
+	}
+
+	for _, test := range tests {
+		err := Pair(api.Invocation{}, test.arguments)
+
+		if err == nil || !strings.Contains(err.Error(), test.wantError) {
+			t.Errorf("%s: error = %v, want it to mention %q", test.name, err, test.wantError)
+		}
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /fleets/3/devices", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no such device", http.StatusNotFound)
+	})
+
+	invocation, _ := apitest.LoggedInInvocation(t, mux)
+
+	err := Pair(invocation, []string{"354820091234567", "3"})
+
+	if err == nil || err.Error() != "no such device" {
+		t.Fatalf("error = %v, want no such device", err)
+	}
+}
+
 func TestDeviceRename(t *testing.T) {
 	tests := []struct {
 		name       string
