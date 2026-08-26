@@ -3,6 +3,7 @@ package device
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,6 +12,107 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 	"github.com/siliconwitchery/superstack-cli/internal/api/apitest"
 )
+
+func TestDevicePair(t *testing.T) {
+	fleets := `[{"id":3,"name":"pilot","owner":true}]`
+	unpaired := `[{"imei":"111111111111111","name":null,"fleet_id":0,"last_seen_at":null}]`
+	paired := `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":null}]`
+
+	tests := []struct {
+		name          string
+		arguments     []string
+		pairStatus    int
+		pairRefusal   string
+		pollsToPair   int
+		wantShown     []string
+		wantError     string
+		wantPairCalls int
+	}{
+		{
+			name:          "pairing completes when the button is pressed",
+			arguments:     []string{"111111111111111", "3"},
+			pairStatus:    http.StatusAccepted,
+			pollsToPair:   2,
+			wantShown:     []string{"Press the pairing button on the device.", `Paired device "roof" into fleet "pilot".`},
+			wantPairCalls: 1,
+		},
+		{
+			name:          "a server refusal is shown",
+			arguments:     []string{"111111111111111", "3"},
+			pairStatus:    http.StatusConflict,
+			pairRefusal:   "the device is already paired, unpair it first",
+			wantError:     "already paired",
+			wantPairCalls: 1,
+		},
+		{name: "an unknown fleet is refused", arguments: []string{"111111111111111", "9"}, wantError: "no such fleet"},
+		{name: "a malformed IMEI is refused", arguments: []string{"roof", "3"}, wantError: "printed on the device"},
+		{name: "a wordy fleet id is refused", arguments: []string{"111111111111111", "pilot"}, wantError: "shown by fleet list"},
+		{name: "missing arguments", arguments: []string{"111111111111111"}, wantError: "takes an IMEI and a fleet id"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pairCalls := 0
+			polls := 0
+
+			mux := http.NewServeMux()
+
+			mux.HandleFunc("GET /fleets", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, fleets) })
+
+			mux.HandleFunc("POST /devices/{imei}/pair", func(w http.ResponseWriter, r *http.Request) {
+				pairCalls++
+
+				body, err := io.ReadAll(r.Body)
+
+				if err != nil || string(body) != `{"fleet_id":3}` {
+					t.Errorf("the pairing sent body %q", body)
+				}
+
+				if test.pairRefusal != "" {
+					http.Error(w, test.pairRefusal, test.pairStatus)
+					return
+				}
+
+				w.WriteHeader(test.pairStatus)
+			})
+
+			mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
+				polls++
+
+				if polls >= test.pollsToPair {
+					fmt.Fprint(w, paired)
+					return
+				}
+
+				fmt.Fprint(w, unpaired)
+			})
+
+			invocation, out := apitest.LoggedInInvocation(t, mux)
+
+			err := Pair(invocation, test.arguments)
+
+			printed := out.String()
+
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("error = %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, want := range test.wantShown {
+				if !strings.Contains(printed, want) {
+					t.Errorf("output %q omits %q", printed, want)
+				}
+			}
+
+			if pairCalls != test.wantPairCalls {
+				t.Errorf("the pairing route was called %d times, want %d", pairCalls, test.wantPairCalls)
+			}
+		})
+	}
+}
 
 func TestDeviceList(t *testing.T) {
 	now := time.Now()

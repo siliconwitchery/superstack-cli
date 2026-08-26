@@ -146,6 +146,102 @@ func List(invocation api.Invocation, arguments []string) error {
 	return nil
 }
 
+func Pair(invocation api.Invocation, arguments []string) error {
+	if len(arguments) != 2 {
+		return errors.New("device pair takes an IMEI and a fleet id")
+	}
+
+	imei := arguments[0]
+
+	if !validImei(imei) {
+		return errors.New("the IMEI is the 15-digit number printed on the device")
+	}
+
+	fleetId, err := strconv.ParseInt(arguments[1], 10, 64)
+
+	if err != nil || fleetId < 1 {
+		return errors.New("the fleet id is the number shown by fleet list")
+	}
+
+	fleets, err := api.FetchFleets(invocation)
+
+	if err != nil {
+		return err
+	}
+
+	fleetName := ""
+
+	for _, fleet := range fleets {
+		if fleet.Id == fleetId {
+			fleetName = fleet.Name
+		}
+	}
+
+	if fleetName == "" {
+		return errors.New("no such fleet, fleet list shows yours")
+	}
+
+	body, err := json.Marshal(map[string]int64{"fleet_id": fleetId})
+
+	if err != nil {
+		return err
+	}
+
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost, "/devices/"+imei+"/pair", bytes.NewReader(body))
+
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := invocation.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your internet access")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusAccepted {
+		return api.ServerError(response)
+	}
+
+	fmt.Fprintln(invocation.Out, "Press the pairing button on the device.")
+
+	deadline := time.Now().Add(2 * time.Minute)
+
+	for {
+		time.Sleep(2 * time.Second)
+
+		devices, err := api.FetchDevices(invocation)
+
+		if err != nil {
+			return err
+		}
+
+		for _, device := range devices {
+			if device.Imei != imei || device.FleetId != fleetId {
+				continue
+			}
+
+			label := imei
+
+			if device.Name != nil && *device.Name != "" {
+				label = *device.Name
+			}
+
+			fmt.Fprintf(invocation.Out, "Paired device %q into fleet %q.\n", api.Printable(label), api.Printable(fleetName))
+
+			return nil
+		}
+
+		if time.Now().After(deadline) {
+			return errors.New("the pairing button was not pressed in time, run device pair again")
+		}
+	}
+}
+
 func Rename(invocation api.Invocation, arguments []string) error {
 	if len(arguments) != 2 {
 		return errors.New("device rename takes an IMEI and a new name, quoted if it has spaces")
