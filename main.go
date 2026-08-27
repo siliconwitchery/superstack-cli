@@ -36,6 +36,7 @@ var sections = []dispatch.Section{
 	{
 		Title: "Devices",
 		Commands: []dispatch.Command{
+			{Name: "device pair", Arguments: "<imei> <fleet_id> [name]", Summary: "Pair a device with a fleet", Run: device.Pair},
 			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices and when they were last seen", Run: device.List},
 			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: device.Rename},
 			{Name: "device unpair", Arguments: "<imei>", Summary: "Remove a device from its fleet", Run: device.Unpair},
