@@ -6,10 +6,13 @@ import (
 )
 
 type DeviceEntry struct {
-	Imei       string  `json:"imei"`
-	Name       *string `json:"name"`
-	FleetId    int64   `json:"fleet_id"`
-	LastSeenAt *string `json:"last_seen_at"`
+	Imei         string  `json:"imei"`
+	Name         *string `json:"name"`
+	FleetId      int64   `json:"fleet_id"`
+	LastSeenAt   *string `json:"last_seen_at"`
+	RunState     *string `json:"run_state"`
+	StorageUsed  *uint64 `json:"storage_used"`
+	StorageTotal *uint64 `json:"storage_total"`
 }
 
 func FetchDevices(invocation Invocation) ([]DeviceEntry, error) {
