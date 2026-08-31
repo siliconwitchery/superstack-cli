@@ -14,9 +14,9 @@ import (
 
 func TestDeviceList(t *testing.T) {
 	now := time.Now()
-	devices := fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q},`+
-		`{"imei":"222222222222222","name":null,"fleet_id":4,"last_seen_at":%q},`+
-		`{"imei":"333333333333333","name":"shed","fleet_id":3,"last_seen_at":null}]`,
+	devices := fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q,"run_state":"running","storage_used":128,"storage_total":1024},`+
+		`{"imei":"222222222222222","name":null,"fleet_id":4,"last_seen_at":%q,"run_state":"crashed","storage_used":1536,"storage_total":1048576},`+
+		`{"imei":"333333333333333","name":"shed","fleet_id":3,"last_seen_at":null,"run_state":null,"storage_used":null,"storage_total":null}]`,
 		now.Add(-time.Minute).Format(time.RFC3339), now.Add(-3*time.Hour).Format(time.RFC3339))
 	fleets := `[{"id":3,"name":"pilot","owner":true},{"id":4,"name":"workshop","owner":true},{"id":5,"name":"empty","owner":true}]`
 
@@ -31,17 +31,17 @@ func TestDeviceList(t *testing.T) {
 		fleets     string
 		refusal    string
 	}{
-		{name: "table", wantShown: []string{"IMEI             NAME  FLEET     LAST SEEN", "roof", "pilot", "just now", "-", "workshop", "3 h ago", "never"}},
+		{name: "table", wantShown: []string{"IMEI             NAME  FLEET", "RUN STATE", "STORAGE", "LAST SEEN", "roof", "pilot", "running", "128 B / 1.0 KiB", "workshop", "crashed", "1.5 KiB / 1.0 MiB", "3 h ago", "never"}},
 		{name: "filtered", arguments: []string{"3"}, wantShown: []string{"111111111111111", "333333333333333"}, wantHidden: []string{"222222222222222", "workshop"}},
-		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`, `"last_seen_at":`}, wantHidden: []string{"LAST SEEN", "222222222222222", `"reported_state"`, `"run_state"`, `"storage_used"`}},
+		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`, `"last_seen_at":`, `"run_state":"running"`, `"storage_used":128`, `"storage_total":1024`}, wantHidden: []string{"LAST SEEN", "222222222222222", `"reported_state"`}},
 		{name: "empty fleet", arguments: []string{"5"}, wantExact: "No devices in that fleet.\n"},
 		{name: "no devices", devices: `[]`, fleets: `[]`, wantExact: "No devices yet.\n"},
 		{name: "server refusal", refusal: "devices unavailable", wantError: "devices unavailable"},
 		{name: "unknown fleet", arguments: []string{"9"}, wantError: "no such fleet"},
 		{name: "two ids", arguments: []string{"3", "4"}, wantError: "takes at most one fleet id"},
 		{name: "wordy id", arguments: []string{"pilot"}, wantError: "shown by fleet list"},
-		{name: "an unreadable last seen time leaves the rest of the table", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday"}]`, wantShown: []string{"111111111111111  roof  pilot  unknown"}},
-		{name: "a fleet the list does not name", devices: `[{"imei":"888888888888888","name":"orphan","fleet_id":99}]`, wantShown: []string{"888888888888888  orphan  -      never"}},
+		{name: "an unreadable last seen time leaves the rest of the table", devices: `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":"yesterday","run_state":"stopped","storage_used":0,"storage_total":1024}]`, wantShown: []string{"111111111111111  roof  pilot  stopped", "0 B / 1.0 KiB", "unknown"}},
+		{name: "a fleet the list does not name", devices: `[{"imei":"888888888888888","name":"orphan","fleet_id":99}]`, wantShown: []string{"888888888888888  orphan  -", "never"}},
 		{name: "a name with control characters is escaped", devices: `[{"imei":"111111111111111","name":"\u001b[2K\rhidden","fleet_id":3}]`, wantShown: []string{`\x1b[2K\rhidden`}, wantHidden: []string{"\x1b"}},
 		{name: "minutes ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-12*time.Minute).Format(time.RFC3339)), wantShown: []string{"12 min ago"}},
 		{name: "days ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-49*time.Hour).Format(time.RFC3339)), wantShown: []string{"2 d ago"}},

@@ -161,9 +161,13 @@ func List(invocation api.Invocation, arguments []string) error {
 	imeiWidth := len("IMEI")
 	nameWidth := len("NAME")
 	fleetWidth := len("FLEET")
+	runStateWidth := len("RUN STATE")
+	storageWidth := len("STORAGE")
 	imeiValues := make([]string, len(filtered))
 	nameValues := make([]string, len(filtered))
 	fleetValues := make([]string, len(filtered))
+	runStateValues := make([]string, len(filtered))
+	storageValues := make([]string, len(filtered))
 	lastSeenValues := make([]string, len(filtered))
 
 	for index, device := range filtered {
@@ -202,25 +206,63 @@ func List(invocation api.Invocation, arguments []string) error {
 			fleetName = "-"
 		}
 
+		runState := "-"
+
+		if device.RunState != nil {
+			runState = *device.RunState
+		}
+
+		storage := "-"
+
+		if device.StorageUsed != nil && device.StorageTotal != nil {
+			storage = fmt.Sprintf("%s / %s", formatByteCount(*device.StorageUsed), formatByteCount(*device.StorageTotal))
+		}
+
 		imeiValues[index] = api.Printable(device.Imei)
 		nameValues[index] = api.Printable(name)
 		fleetValues[index] = api.Printable(fleetName)
+		runStateValues[index] = runState
+		storageValues[index] = storage
 		lastSeenValues[index] = lastSeen
 		imeiWidth = max(imeiWidth, len(imeiValues[index]))
 		nameWidth = max(nameWidth, len(nameValues[index]))
 		fleetWidth = max(fleetWidth, len(fleetValues[index]))
+		runStateWidth = max(runStateWidth, len(runStateValues[index]))
+		storageWidth = max(storageWidth, len(storageValues[index]))
 	}
 
-	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %s\n",
-		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET", "LAST SEEN")
+	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
+		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET", runStateWidth, "RUN STATE",
+		storageWidth, "STORAGE", "LAST SEEN")
 
 	for index := range filtered {
-		fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %s\n",
+		fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 			imeiWidth, imeiValues[index], nameWidth, nameValues[index], fleetWidth, fleetValues[index],
-			lastSeenValues[index])
+			runStateWidth, runStateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
 	}
 
 	return nil
+}
+
+func formatByteCount(byteCount uint64) string {
+	units := [...]string{"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"}
+	value := float64(byteCount)
+	unit := 0
+
+	for value >= 1024 && unit < len(units)-1 {
+		value /= 1024
+		unit++
+	}
+
+	if unit == 0 {
+		return fmt.Sprintf("%d B", byteCount)
+	}
+
+	if value >= 10 {
+		return fmt.Sprintf("%.0f %s", value, units[unit])
+	}
+
+	return fmt.Sprintf("%.1f %s", value, units[unit])
 }
 
 func Rename(invocation api.Invocation, arguments []string) error {
