@@ -46,7 +46,6 @@ func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
 		"device start":   true,
 		"device stop":    true,
 		"device restart": true,
-		"upload":         true,
 		"download":       true,
 		"dev":            true,
 		"tail":           true,
@@ -98,6 +97,7 @@ func TestNoPartImportsAnother(t *testing.T) {
 		"dispatch":    {"api"},
 		"account":     {"api"},
 		"device":      {"api"},
+		"files":       {"api"},
 		"fleet":       {"api"},
 		"fleetkey":    {"api"},
 		"login":       {"api"},
@@ -166,6 +166,7 @@ func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 		"key create", "key list", "key revoke",
 		"login", "logout",
 		"member add", "member list", "member remove",
+		"upload",
 	}
 
 	offered := []string{}
