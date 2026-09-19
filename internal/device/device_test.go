@@ -31,7 +31,7 @@ func TestDeviceList(t *testing.T) {
 		fleets     string
 		refusal    string
 	}{
-		{name: "table", wantShown: []string{"IMEI             NAME  FLEET", "RUN STATE", "STORAGE", "LAST SEEN", "roof", "pilot", "running", "128 B / 1.0 KiB", "workshop", "crashed", "1.5 KiB / 1.0 MiB", "3 h ago", "never"}},
+		{name: "table", wantShown: []string{"IMEI             NAME  FLEET", "STATE", "STORAGE", "LAST SEEN", "roof", "pilot", "running", "128 B / 1.0 KiB", "workshop", "crashed", "1.5 KiB / 1.0 MiB", "3 h ago", "never"}, wantHidden: []string{"RUN STATE"}},
 		{name: "filtered", arguments: []string{"3"}, wantShown: []string{"111111111111111", "333333333333333"}, wantHidden: []string{"222222222222222", "workshop"}},
 		{name: "json flag anywhere", arguments: []string{"3", "--json"}, wantShown: []string{`"imei":"111111111111111"`, `"fleet_id":3`, `"last_seen_at":`, `"run_state":"running"`, `"storage_used":128`, `"storage_total":1024`}, wantHidden: []string{"LAST SEEN", "222222222222222", `"reported_state"`}},
 		{name: "empty fleet", arguments: []string{"5"}, wantExact: "No devices in that fleet.\n"},
@@ -45,6 +45,52 @@ func TestDeviceList(t *testing.T) {
 		{name: "a name with control characters is escaped", devices: `[{"imei":"111111111111111","name":"\u001b[2K\rhidden","fleet_id":3}]`, wantShown: []string{`\x1b[2K\rhidden`}, wantHidden: []string{"\x1b"}},
 		{name: "minutes ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-12*time.Minute).Format(time.RFC3339)), wantShown: []string{"12 min ago"}},
 		{name: "days ago", devices: fmt.Sprintf(`[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":%q}]`, now.Add(-49*time.Hour).Format(time.RFC3339)), wantShown: []string{"2 d ago"}},
+	}
+
+	for _, state := range []struct {
+		served string
+		shown  string
+	}{
+		{`"no_space"`, "no space"},
+		{`"rejected"`, "rejected"},
+		{`"failed"`, "failed"},
+		{`"no_code"`, "no code"},
+		{`"updating"`, "updating"},
+		{`"running"`, "running"},
+		{`"stopped"`, "stopped"},
+		{`"crashed"`, "crashed"},
+		{`null`, "-"},
+	} {
+		tests = append(tests, struct {
+			name       string
+			arguments  []string
+			wantShown  []string
+			wantHidden []string
+			wantExact  string
+			wantError  string
+			devices    string
+			fleets     string
+			refusal    string
+		}{
+			name:      "state " + state.shown,
+			devices:   `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":null,"run_state":` + state.served + `}]`,
+			wantShown: []string{"111111111111111  roof  pilot  " + state.shown + "  "},
+		}, struct {
+			name       string
+			arguments  []string
+			wantShown  []string
+			wantHidden []string
+			wantExact  string
+			wantError  string
+			devices    string
+			fleets     string
+			refusal    string
+		}{
+			name:      "json state " + state.shown,
+			arguments: []string{"--json"},
+			devices:   `[{"imei":"111111111111111","name":"roof","fleet_id":3,"last_seen_at":null,"run_state":` + state.served + `}]`,
+			wantShown: []string{`"run_state":` + state.served},
+		})
 	}
 
 	for _, test := range tests {

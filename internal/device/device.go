@@ -161,12 +161,12 @@ func List(invocation api.Invocation, arguments []string) error {
 	imeiWidth := len("IMEI")
 	nameWidth := len("NAME")
 	fleetWidth := len("FLEET")
-	runStateWidth := len("RUN STATE")
+	stateWidth := len("STATE")
 	storageWidth := len("STORAGE")
 	imeiValues := make([]string, len(filtered))
 	nameValues := make([]string, len(filtered))
 	fleetValues := make([]string, len(filtered))
-	runStateValues := make([]string, len(filtered))
+	stateValues := make([]string, len(filtered))
 	storageValues := make([]string, len(filtered))
 	lastSeenValues := make([]string, len(filtered))
 
@@ -206,10 +206,10 @@ func List(invocation api.Invocation, arguments []string) error {
 			fleetName = "-"
 		}
 
-		runState := "-"
+		state := "-"
 
 		if device.RunState != nil {
-			runState = *device.RunState
+			state = strings.ReplaceAll(*device.RunState, "_", " ")
 		}
 
 		storage := "-"
@@ -221,24 +221,24 @@ func List(invocation api.Invocation, arguments []string) error {
 		imeiValues[index] = api.Printable(device.Imei)
 		nameValues[index] = api.Printable(name)
 		fleetValues[index] = api.Printable(fleetName)
-		runStateValues[index] = runState
+		stateValues[index] = state
 		storageValues[index] = storage
 		lastSeenValues[index] = lastSeen
 		imeiWidth = max(imeiWidth, len(imeiValues[index]))
 		nameWidth = max(nameWidth, len(nameValues[index]))
 		fleetWidth = max(fleetWidth, len(fleetValues[index]))
-		runStateWidth = max(runStateWidth, len(runStateValues[index]))
+		stateWidth = max(stateWidth, len(stateValues[index]))
 		storageWidth = max(storageWidth, len(storageValues[index]))
 	}
 
 	fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
-		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET", runStateWidth, "RUN STATE",
+		imeiWidth, "IMEI", nameWidth, "NAME", fleetWidth, "FLEET", stateWidth, "STATE",
 		storageWidth, "STORAGE", "LAST SEEN")
 
 	for index := range filtered {
 		fmt.Fprintf(invocation.Out, "%-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 			imeiWidth, imeiValues[index], nameWidth, nameValues[index], fleetWidth, fleetValues[index],
-			runStateWidth, runStateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
+			stateWidth, stateValues[index], storageWidth, storageValues[index], lastSeenValues[index])
 	}
 
 	return nil
