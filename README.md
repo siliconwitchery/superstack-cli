@@ -4,7 +4,7 @@
 fleets, manage devices, and control who can reach them. It is a single static
 binary for managing Superstack from a terminal.
 
-Uploading Lua code and streaming logs are not available yet.
+Streaming logs is not available yet.
 
 ## Install
 
