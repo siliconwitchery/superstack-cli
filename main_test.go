@@ -46,7 +46,6 @@ func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
 		"device start":   true,
 		"device stop":    true,
 		"device restart": true,
-		"download":       true,
 		"dev":            true,
 		"tail":           true,
 	}
@@ -162,6 +161,7 @@ func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 	wired := []string{
 		"account balance", "account delete", "account topup",
 		"device list", "device pair", "device rename", "device unpair",
+		"download",
 		"fleet create", "fleet delete", "fleet list", "fleet rename", "fleet transfer",
 		"key create", "key list", "key revoke",
 		"login", "logout",

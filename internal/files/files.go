@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -179,6 +180,109 @@ func Upload(invocation api.Invocation, arguments []string) error {
 
 	fmt.Fprintf(invocation.Out, "Uploaded %d %s to %d %s in fleet %d. They arrive at each device's next check-in.\n",
 		len(collected), fileNoun, result.Devices, deviceNoun, fleetID)
+
+	return nil
+}
+
+func Download(invocation api.Invocation, arguments []string) error {
+	if len(arguments) != 2 {
+		return errors.New("download takes an IMEI, then the directory to download into")
+	}
+
+	imei := arguments[0]
+	isImei := len(imei) == 15 && !strings.ContainsFunc(imei, func(digit rune) bool { return digit < '0' || digit > '9' })
+
+	if !isImei {
+		return errors.New("download names one device by the 15-digit IMEI printed on it, not a fleet")
+	}
+
+	destination := arguments[1]
+	info, err := os.Stat(destination)
+
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%s could not be read", destination)
+	}
+
+	if err == nil && !info.IsDir() {
+		return fmt.Errorf("%s is a file, choose an empty or new directory", destination)
+	}
+
+	if err == nil {
+		entries, err := os.ReadDir(destination)
+
+		if err != nil {
+			return fmt.Errorf("%s could not be read", destination)
+		}
+
+		if len(entries) > 0 {
+			return fmt.Errorf("%s is not empty, choose an empty or new directory", destination)
+		}
+	}
+
+	request, err := api.AuthenticatedRequest(invocation, http.MethodGet, "/devices/"+imei+"/files", nil)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := invocation.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your internet access")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return api.ServerError(response)
+	}
+
+	result := struct {
+		Files map[string][]byte `json:"files"`
+	}{}
+
+	err = api.Decode(response, &result)
+
+	if err != nil {
+		return err
+	}
+
+	paths := make([]string, 0, len(result.Files))
+
+	for path := range result.Files {
+		if path == "" || strings.HasPrefix(path, "/") || filepath.IsAbs(filepath.FromSlash(path)) || slices.Contains(strings.Split(path, "/"), "..") {
+			return errors.New("the download could not be trusted, so nothing was written")
+		}
+
+		paths = append(paths, path)
+	}
+
+	slices.Sort(paths)
+
+	for _, path := range paths {
+		localPath := filepath.Join(destination, filepath.FromSlash(path))
+		err = os.MkdirAll(filepath.Dir(localPath), 0o755)
+
+		if err != nil {
+			return fmt.Errorf("%s could not be created", filepath.Dir(localPath))
+		}
+
+		err = os.WriteFile(localPath, result.Files[path], 0o644)
+
+		if err != nil {
+			return fmt.Errorf("%s could not be written", localPath)
+		}
+
+		fmt.Fprintln(invocation.Out, localPath)
+	}
+
+	fileNoun := "files"
+
+	if len(paths) == 1 {
+		fileNoun = "file"
+	}
+
+	fmt.Fprintf(invocation.Out, "Downloaded %d %s from device %s into %s.\n", len(paths), fileNoun, imei, destination)
 
 	return nil
 }
