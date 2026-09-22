@@ -198,12 +198,15 @@ func TestDownload(t *testing.T) {
 
 		for name, content := range files {
 			path := filepath.Join(directory, filepath.FromSlash(name))
+			err := os.MkdirAll(filepath.Dir(path), 0o755)
 
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			if err != nil {
 				t.Fatal(err)
 			}
 
-			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			err = os.WriteFile(path, []byte(content), 0o644)
+
+			if err != nil {
 				t.Fatal(err)
 			}
 		}
