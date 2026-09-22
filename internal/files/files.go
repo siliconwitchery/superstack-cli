@@ -1,6 +1,7 @@
 package files
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -204,19 +205,7 @@ func Download(invocation api.Invocation, arguments []string) error {
 	}
 
 	if err == nil && !info.IsDir() {
-		return fmt.Errorf("%s is a file, choose an empty or new directory", destination)
-	}
-
-	if err == nil {
-		entries, err := os.ReadDir(destination)
-
-		if err != nil {
-			return fmt.Errorf("%s could not be read", destination)
-		}
-
-		if len(entries) > 0 {
-			return fmt.Errorf("%s is not empty, choose an empty or new directory", destination)
-		}
+		return fmt.Errorf("%s is a file, choose a directory", destination)
 	}
 
 	request, err := api.AuthenticatedRequest(invocation, http.MethodGet, "/devices/"+imei+"/files", nil)
@@ -258,6 +247,34 @@ func Download(invocation api.Invocation, arguments []string) error {
 	}
 
 	slices.Sort(paths)
+
+	existing := []string{}
+
+	for _, path := range paths {
+		localPath := filepath.Join(destination, filepath.FromSlash(path))
+		_, err := os.Stat(localPath)
+
+		if err == nil {
+			existing = append(existing, localPath)
+		}
+	}
+
+	if len(existing) == 1 {
+		fmt.Fprintf(invocation.Out, "%s already exists. Replace it? [y/N] ", existing[0])
+	} else if len(existing) > 1 {
+		fmt.Fprintf(invocation.Out, "These files already exist:\n%s\nReplace them? [y/N] ", strings.Join(existing, "\n"))
+	}
+
+	if len(existing) > 0 {
+		answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
+
+		answer = strings.ToLower(strings.TrimSpace(answer))
+
+		if answer != "y" && answer != "yes" {
+			fmt.Fprintln(invocation.Out, "Nothing downloaded.")
+			return nil
+		}
+	}
 
 	for _, path := range paths {
 		localPath := filepath.Join(destination, filepath.FromSlash(path))

@@ -2,6 +2,7 @@ package files
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -192,42 +193,116 @@ func TestDownload(t *testing.T) {
 		w.Write([]byte(`{"files":{"main.lua":"cHJpbnQoMSk=","../escape.lua":"cHJpbnQoMSk="}}`))
 	})
 
-	occupied := writeTestProject(t)
-	file := filepath.Join(occupied, "main.lua")
+	directoryWith := func(files map[string]string) string {
+		directory := t.TempDir()
+
+		for name, content := range files {
+			path := filepath.Join(directory, filepath.FromSlash(name))
+
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		return directory
+	}
+
+	downloaded := func(destination string) string {
+		return filepath.Join(destination, "lib", "sensor.lua") + "\n" + filepath.Join(destination, "main.lua") + "\n" +
+			"Downloaded 2 files from device 354820091234567 into " + destination + ".\n"
+	}
+
+	bundle := map[string]string{"lib/sensor.lua": "return 2", "main.lua": "print(1)"}
+	fresh := filepath.Join(t.TempDir(), "new")
+	empty := t.TempDir()
+	unrelated := directoryWith(map[string]string{"notes.txt": "keep"})
+	file := filepath.Join(unrelated, "notes.txt")
+	replaced := directoryWith(map[string]string{"main.lua": "print(0)"})
+	declined := directoryWith(map[string]string{"main.lua": "print(0)"})
+	unanswered := directoryWith(map[string]string{"main.lua": "print(0)"})
+	both := directoryWith(map[string]string{"lib/sensor.lua": "return 0", "main.lua": "print(0)", "notes.txt": "keep"})
 
 	tests := []struct {
 		name        string
 		imei        string
 		destination string
+		answer      string
 		wantFiles   map[string]string
+		wantOutput  string
 		wantError   string
 	}{
 		{
-			name:        "a device with code",
+			name:        "a new directory",
 			imei:        "354820091234567",
-			destination: filepath.Join(t.TempDir(), "new"),
-			wantFiles:   map[string]string{"lib/sensor.lua": "return 2", "main.lua": "print(1)"},
+			destination: fresh,
+			wantFiles:   bundle,
+			wantOutput:  downloaded(fresh),
 		},
 		{
 			name:        "an empty directory",
 			imei:        "354820091234567",
-			destination: t.TempDir(),
-			wantFiles:   map[string]string{"lib/sensor.lua": "return 2", "main.lua": "print(1)"},
+			destination: empty,
+			wantFiles:   bundle,
+			wantOutput:  downloaded(empty),
 		},
-		{"an unknown device", "354820099999999", t.TempDir(), nil, "no such device"},
-		{"a device in a fleet the user is not a member of", "354820098888888", t.TempDir(), nil, "no such device"},
-		{"a device with no uploaded code", "354820097777777", t.TempDir(), nil, "no code has been uploaded to this device"},
-		{"a fleet id as the target", "3", t.TempDir(), nil, "15-digit IMEI"},
-		{"a wordy target", "rooftop", t.TempDir(), nil, "15-digit IMEI"},
-		{"a non-empty directory", "354820091234567", occupied, nil, "choose an empty or new directory"},
-		{"a file as the target", "354820091234567", file, nil, "choose an empty or new directory"},
-		{"a bundle path that escapes the directory", "354820096666666", t.TempDir(), nil, "could not be trusted"},
-		{"a missing argument", "354820091234567", "", nil, "takes an IMEI"},
+		{
+			name:        "a directory with unrelated files",
+			imei:        "354820091234567",
+			destination: unrelated,
+			wantFiles:   map[string]string{"lib/sensor.lua": "return 2", "main.lua": "print(1)", "notes.txt": "keep"},
+			wantOutput:  downloaded(unrelated),
+		},
+		{
+			name:        "a conflicting file, replaced",
+			imei:        "354820091234567",
+			destination: replaced,
+			answer:      "y\n",
+			wantFiles:   bundle,
+			wantOutput:  filepath.Join(replaced, "main.lua") + " already exists. Replace it? [y/N] " + downloaded(replaced),
+		},
+		{
+			name:        "a conflicting file, declined",
+			imei:        "354820091234567",
+			destination: declined,
+			answer:      "n\n",
+			wantFiles:   map[string]string{"main.lua": "print(0)"},
+			wantOutput:  filepath.Join(declined, "main.lua") + " already exists. Replace it? [y/N] Nothing downloaded.\n",
+		},
+		{
+			name:        "a conflicting file, answered with an empty line",
+			imei:        "354820091234567",
+			destination: unanswered,
+			answer:      "\n",
+			wantFiles:   map[string]string{"main.lua": "print(0)"},
+			wantOutput:  filepath.Join(unanswered, "main.lua") + " already exists. Replace it? [y/N] Nothing downloaded.\n",
+		},
+		{
+			name:        "several conflicting files, replaced",
+			imei:        "354820091234567",
+			destination: both,
+			answer:      "yes\n",
+			wantFiles:   map[string]string{"lib/sensor.lua": "return 2", "main.lua": "print(1)", "notes.txt": "keep"},
+			wantOutput: "These files already exist:\n" + filepath.Join(both, "lib", "sensor.lua") + "\n" + filepath.Join(both, "main.lua") +
+				"\nReplace them? [y/N] " + downloaded(both),
+		},
+		{"an unknown device", "354820099999999", t.TempDir(), "", nil, "", "no such device"},
+		{"a device in a fleet the user is not a member of", "354820098888888", t.TempDir(), "", nil, "", "no such device"},
+		{"a device with no uploaded code", "354820097777777", t.TempDir(), "", nil, "", "no code has been uploaded to this device"},
+		{"a fleet id as the target", "3", t.TempDir(), "", nil, "", "15-digit IMEI"},
+		{"a wordy target", "rooftop", t.TempDir(), "", nil, "", "15-digit IMEI"},
+		{"a file as the target", "354820091234567", file, "", nil, "", "is a file, choose a directory"},
+		{"a bundle path that escapes the directory", "354820096666666", t.TempDir(), "", nil, "", "could not be trusted"},
+		{"a missing argument", "354820091234567", "", "", nil, "", "takes an IMEI"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			invocation, out := apitest.LoggedInInvocation(t, mux)
+			invocation.In = strings.NewReader(test.answer)
 			arguments := []string{test.imei, test.destination}
 
 			if test.destination == "" {
@@ -247,7 +322,7 @@ func TestDownload(t *testing.T) {
 
 				entries, _ := os.ReadDir(test.destination)
 
-				if test.destination != occupied && len(entries) > 0 {
+				if len(entries) > 0 {
 					t.Errorf("%d files were written, want none", len(entries))
 				}
 
@@ -259,28 +334,39 @@ func TestDownload(t *testing.T) {
 			}
 
 			gotFiles := map[string]string{}
-			wantOutput := ""
 
-			for _, path := range []string{"lib/sensor.lua", "main.lua"} {
-				localPath := filepath.Join(test.destination, filepath.FromSlash(path))
-				content, err := os.ReadFile(localPath)
-
-				if err != nil {
-					t.Fatal(err)
+			err = filepath.WalkDir(test.destination, func(path string, entry fs.DirEntry, walkError error) error {
+				if walkError != nil || entry.IsDir() {
+					return walkError
 				}
 
-				gotFiles[path] = string(content)
-				wantOutput += localPath + "\n"
-			}
+				content, err := os.ReadFile(path)
 
-			wantOutput += "Downloaded 2 files from device " + test.imei + " into " + test.destination + ".\n"
+				if err != nil {
+					return err
+				}
+
+				relative, err := filepath.Rel(test.destination, path)
+
+				if err != nil {
+					return err
+				}
+
+				gotFiles[filepath.ToSlash(relative)] = string(content)
+
+				return nil
+			})
+
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if !reflect.DeepEqual(gotFiles, test.wantFiles) {
-				t.Errorf("downloaded files = %v, want %v", gotFiles, test.wantFiles)
+				t.Errorf("files in %s = %v, want %v", test.destination, gotFiles, test.wantFiles)
 			}
 
-			if out.String() != wantOutput {
-				t.Errorf("output = %q, want %q", out.String(), wantOutput)
+			if out.String() != test.wantOutput {
+				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
 			}
 		})
 	}
