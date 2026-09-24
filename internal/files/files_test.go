@@ -72,7 +72,7 @@ func TestUpload(t *testing.T) {
 			arguments:  []string{"3", filepath.Join(project, "main.lua")},
 			wantPath:   "/fleets/3/files",
 			wantFiles:  map[string]string{"main.lua": "print(1)"},
-			wantOutput: "Uploaded 1 file to 2 devices in fleet 3. They arrive at each device's next check-in.\n",
+			wantOutput: "Uploaded 1 file to 2 devices in fleet 3. It arrives at each device's next check-in.\n",
 		},
 	}
 
@@ -228,6 +228,7 @@ func TestDownload(t *testing.T) {
 	declined := directoryWith(map[string]string{"main.lua": "print(0)"})
 	unanswered := directoryWith(map[string]string{"main.lua": "print(0)"})
 	both := directoryWith(map[string]string{"lib/sensor.lua": "return 0", "main.lua": "print(0)", "notes.txt": "keep"})
+	blocked := directoryWith(map[string]string{"lib": "not a directory"})
 
 	tests := []struct {
 		name        string
@@ -298,6 +299,13 @@ func TestDownload(t *testing.T) {
 		{"a fleet id as the target", "3", t.TempDir(), "", nil, "", "15-digit IMEI"},
 		{"a wordy target", "rooftop", t.TempDir(), "", nil, "", "15-digit IMEI"},
 		{"a file as the target", "354820091234567", file, "", nil, "", "is a file, choose a directory"},
+		{
+			name:        "a file where the bundle has a directory",
+			imei:        "354820091234567",
+			destination: blocked,
+			wantFiles:   map[string]string{"lib": "not a directory"},
+			wantError:   filepath.Join(blocked, "lib") + " is a file where the code needs a directory",
+		},
 		{"a bundle path that escapes the directory", "354820096666666", t.TempDir(), "", nil, "", "could not be trusted"},
 		{"a missing argument", "354820091234567", "", "", nil, "", "takes an IMEI"},
 	}
@@ -323,16 +331,16 @@ func TestDownload(t *testing.T) {
 					t.Errorf("output = %q, want nothing", out.String())
 				}
 
-				entries, _ := os.ReadDir(test.destination)
+				if test.wantFiles == nil {
+					entries, _ := os.ReadDir(test.destination)
 
-				if len(entries) > 0 {
-					t.Errorf("%d files were written, want none", len(entries))
+					if len(entries) > 0 {
+						t.Errorf("%d files were written, want none", len(entries))
+					}
+
+					return
 				}
-
-				return
-			}
-
-			if err != nil {
+			} else if err != nil {
 				t.Fatal(err)
 			}
 

@@ -143,9 +143,11 @@ func Upload(invocation api.Invocation, arguments []string) error {
 	defer response.Body.Close()
 
 	fileNoun := "files"
+	arrival := "They arrive"
 
 	if len(collected) == 1 {
 		fileNoun = "file"
+		arrival = "It arrives"
 	}
 
 	if isImei {
@@ -153,8 +155,8 @@ func Upload(invocation api.Invocation, arguments []string) error {
 			return api.ServerError(response)
 		}
 
-		fmt.Fprintf(invocation.Out, "Uploaded %d %s to device %s. They arrive at its next check-in.\n",
-			len(collected), fileNoun, target)
+		fmt.Fprintf(invocation.Out, "Uploaded %d %s to device %s. %s at its next check-in.\n",
+			len(collected), fileNoun, target, arrival)
 
 		return nil
 	}
@@ -179,8 +181,8 @@ func Upload(invocation api.Invocation, arguments []string) error {
 		deviceNoun = "device"
 	}
 
-	fmt.Fprintf(invocation.Out, "Uploaded %d %s to %d %s in fleet %d. They arrive at each device's next check-in.\n",
-		len(collected), fileNoun, result.Devices, deviceNoun, fleetID)
+	fmt.Fprintf(invocation.Out, "Uploaded %d %s to %d %s in fleet %d. %s at each device's next check-in.\n",
+		len(collected), fileNoun, result.Devices, deviceNoun, fleetID, arrival)
 
 	return nil
 }
@@ -247,6 +249,20 @@ func Download(invocation api.Invocation, arguments []string) error {
 	}
 
 	slices.Sort(paths)
+
+	root := filepath.Clean(destination)
+
+	for _, path := range paths {
+		localPath := filepath.Join(root, filepath.FromSlash(path))
+
+		for parent := filepath.Dir(localPath); parent != root; parent = filepath.Dir(parent) {
+			info, err := os.Stat(parent)
+
+			if err == nil && !info.IsDir() {
+				return fmt.Errorf("%s is a file where the code needs a directory", parent)
+			}
+		}
+	}
 
 	existing := []string{}
 
