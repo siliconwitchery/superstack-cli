@@ -1,6 +1,7 @@
 package files
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -141,9 +143,11 @@ func Upload(invocation api.Invocation, arguments []string) error {
 	defer response.Body.Close()
 
 	fileNoun := "files"
+	arrival := "They arrive"
 
 	if len(collected) == 1 {
 		fileNoun = "file"
+		arrival = "It arrives"
 	}
 
 	if isImei {
@@ -151,8 +155,8 @@ func Upload(invocation api.Invocation, arguments []string) error {
 			return api.ServerError(response)
 		}
 
-		fmt.Fprintf(invocation.Out, "Uploaded %d %s to device %s. They arrive at its next check-in.\n",
-			len(collected), fileNoun, target)
+		fmt.Fprintf(invocation.Out, "Uploaded %d %s to device %s. %s at its next check-in.\n",
+			len(collected), fileNoun, target, arrival)
 
 		return nil
 	}
@@ -177,8 +181,141 @@ func Upload(invocation api.Invocation, arguments []string) error {
 		deviceNoun = "device"
 	}
 
-	fmt.Fprintf(invocation.Out, "Uploaded %d %s to %d %s in fleet %d. They arrive at each device's next check-in.\n",
-		len(collected), fileNoun, result.Devices, deviceNoun, fleetID)
+	fmt.Fprintf(invocation.Out, "Uploaded %d %s to %d %s in fleet %d. %s at each device's next check-in.\n",
+		len(collected), fileNoun, result.Devices, deviceNoun, fleetID, arrival)
+
+	return nil
+}
+
+func Download(invocation api.Invocation, arguments []string) error {
+	if len(arguments) != 2 {
+		return errors.New("download takes an IMEI, then the directory to download into")
+	}
+
+	imei := arguments[0]
+	isImei := len(imei) == 15 && !strings.ContainsFunc(imei, func(digit rune) bool { return digit < '0' || digit > '9' })
+
+	if !isImei {
+		return errors.New("download names one device by the 15-digit IMEI printed on it, not a fleet")
+	}
+
+	destination := arguments[1]
+	info, err := os.Stat(destination)
+
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%s could not be read", destination)
+	}
+
+	if err == nil && !info.IsDir() {
+		return fmt.Errorf("%s is a file, choose a directory", destination)
+	}
+
+	request, err := api.AuthenticatedRequest(invocation, http.MethodGet, "/devices/"+imei+"/files", nil)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := invocation.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your internet access")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return api.ServerError(response)
+	}
+
+	result := struct {
+		Files map[string][]byte `json:"files"`
+	}{}
+
+	err = api.Decode(response, &result)
+
+	if err != nil {
+		return err
+	}
+
+	paths := make([]string, 0, len(result.Files))
+
+	for path := range result.Files {
+		if path == "" || strings.HasPrefix(path, "/") || filepath.IsAbs(filepath.FromSlash(path)) || slices.Contains(strings.Split(path, "/"), "..") {
+			return errors.New("the download could not be trusted, so nothing was written")
+		}
+
+		paths = append(paths, path)
+	}
+
+	slices.Sort(paths)
+
+	root := filepath.Clean(destination)
+
+	for _, path := range paths {
+		localPath := filepath.Join(root, filepath.FromSlash(path))
+
+		for parent := filepath.Dir(localPath); parent != root; parent = filepath.Dir(parent) {
+			info, err := os.Stat(parent)
+
+			if err == nil && !info.IsDir() {
+				return fmt.Errorf("%s is a file where the code needs a directory", parent)
+			}
+		}
+	}
+
+	existing := []string{}
+
+	for _, path := range paths {
+		localPath := filepath.Join(destination, filepath.FromSlash(path))
+		_, err := os.Stat(localPath)
+
+		if err == nil {
+			existing = append(existing, localPath)
+		}
+	}
+
+	if len(existing) == 1 {
+		fmt.Fprintf(invocation.Out, "%s already exists. Replace it? [y/N] ", existing[0])
+	} else if len(existing) > 1 {
+		fmt.Fprintf(invocation.Out, "These files already exist:\n%s\nReplace them? [y/N] ", strings.Join(existing, "\n"))
+	}
+
+	if len(existing) > 0 {
+		answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
+
+		answer = strings.ToLower(strings.TrimSpace(answer))
+
+		if answer != "y" && answer != "yes" {
+			fmt.Fprintln(invocation.Out, "Nothing downloaded.")
+			return nil
+		}
+	}
+
+	for _, path := range paths {
+		localPath := filepath.Join(destination, filepath.FromSlash(path))
+		err = os.MkdirAll(filepath.Dir(localPath), 0o755)
+
+		if err != nil {
+			return fmt.Errorf("%s could not be created", filepath.Dir(localPath))
+		}
+
+		err = os.WriteFile(localPath, result.Files[path], 0o644)
+
+		if err != nil {
+			return fmt.Errorf("%s could not be written", localPath)
+		}
+
+		fmt.Fprintln(invocation.Out, localPath)
+	}
+
+	fileNoun := "files"
+
+	if len(paths) == 1 {
+		fileNoun = "file"
+	}
+
+	fmt.Fprintf(invocation.Out, "Downloaded %d %s from device %s into %s.\n", len(paths), fileNoun, imei, destination)
 
 	return nil
 }
