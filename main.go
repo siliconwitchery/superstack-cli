@@ -41,9 +41,9 @@ var sections = []dispatch.Section{
 			{Name: "device list", Arguments: "[fleet_id] [--json]", Summary: "List devices and when they were last seen", Run: device.List},
 			{Name: "device rename", Arguments: "<imei> <new_name>", Summary: "Rename a device", Run: device.Rename},
 			{Name: "device unpair", Arguments: "<imei>", Summary: "Remove a device from its fleet", Run: device.Unpair},
-			{Name: "device start", Arguments: "<imei>", Summary: "Start the code on a device"},
-			{Name: "device stop", Arguments: "<imei>", Summary: "Stop the code on a device"},
-			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on a device"},
+			{Name: "device start", Arguments: "<imei>", Summary: "Start the code on a device", Run: device.Start},
+			{Name: "device stop", Arguments: "<imei>", Summary: "Stop the code on a device", Run: device.Stop},
+			{Name: "device restart", Arguments: "<imei>", Summary: "Restart the code on a device", Run: device.Restart},
 		},
 	},
 	{
