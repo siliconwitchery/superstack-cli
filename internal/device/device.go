@@ -402,6 +402,58 @@ func Unpair(invocation api.Invocation, arguments []string) error {
 	return nil
 }
 
+func Start(invocation api.Invocation, arguments []string) error {
+	err := sendInstruction(invocation, arguments, "start")
+
+	return err
+}
+
+func Stop(invocation api.Invocation, arguments []string) error {
+	err := sendInstruction(invocation, arguments, "stop")
+
+	return err
+}
+
+func Restart(invocation api.Invocation, arguments []string) error {
+	err := sendInstruction(invocation, arguments, "restart")
+
+	return err
+}
+
+func sendInstruction(invocation api.Invocation, arguments []string, instruction string) error {
+	if len(arguments) != 1 {
+		return fmt.Errorf("device %s takes an IMEI", instruction)
+	}
+
+	imei := arguments[0]
+
+	if !validImei(imei) {
+		return errors.New("the IMEI is the 15-digit number printed on the device")
+	}
+
+	request, err := api.AuthenticatedRequest(invocation, http.MethodPost, "/devices/"+imei+"/"+instruction, nil)
+
+	if err != nil {
+		return err
+	}
+
+	response, err := invocation.Client.Do(request)
+
+	if err != nil {
+		return errors.New("the server could not be reached, check your internet access")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		return api.ServerError(response)
+	}
+
+	fmt.Fprintf(invocation.Out, "Device %s %ss its code at its next check-in.\n", imei, instruction)
+
+	return nil
+}
+
 func validImei(imei string) bool {
 	if len(imei) != 15 {
 		return false

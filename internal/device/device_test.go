@@ -3,7 +3,9 @@ package device
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -409,6 +411,136 @@ func TestDeviceUnpair(t *testing.T) {
 				t.Errorf("unpaired path = %q after decline", unpairedPath)
 			}
 		})
+	}
+}
+
+func TestDeviceStartStopAndRestart(t *testing.T) {
+	commands := []struct {
+		name        string
+		run         func(api.Invocation, []string) error
+		wantRequest string
+		wantOutput  string
+	}{
+		{"start", Start, "POST /devices/354820091234567/start", "Device 354820091234567 starts its code at its next check-in.\n"},
+		{"stop", Stop, "POST /devices/354820091234567/stop", "Device 354820091234567 stops its code at its next check-in.\n"},
+		{"restart", Restart, "POST /devices/354820091234567/restart", "Device 354820091234567 restarts its code at its next check-in.\n"},
+	}
+
+	tests := []struct {
+		name        string
+		status      int
+		refusal     string
+		unreachable bool
+		wantError   string
+	}{
+		{name: "accepted", status: http.StatusNoContent},
+		{name: "a device outside the user's fleets", status: http.StatusNotFound, refusal: "no such device", wantError: "no such device"},
+		{name: "refused", status: http.StatusConflict, refusal: "no code has been uploaded to this device", wantError: "no code has been uploaded to this device"},
+		{name: "unreachable server", unreachable: true, wantError: "the server could not be reached, check your internet access"},
+	}
+
+	for _, command := range commands {
+		for _, test := range tests {
+			t.Run(command.name+" "+test.name, func(t *testing.T) {
+				sawRequest := ""
+				sawBody := ""
+				handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					body, err := io.ReadAll(r.Body)
+
+					if err != nil {
+						t.Error(err)
+					}
+
+					sawRequest = r.Method + " " + r.URL.Path
+					sawBody = string(body)
+
+					if test.refusal != "" {
+						http.Error(w, test.refusal, test.status)
+						return
+					}
+
+					w.WriteHeader(test.status)
+				})
+
+				invocation, out := apitest.LoggedInInvocation(t, handler)
+
+				wantRequest := command.wantRequest
+				wantOutput := command.wantOutput
+
+				if test.unreachable {
+					gone := httptest.NewServer(http.NotFoundHandler())
+					gone.Close()
+
+					invocation.Base = gone.URL
+					wantRequest = ""
+				}
+
+				if test.wantError != "" {
+					wantOutput = ""
+				}
+
+				err := command.run(invocation, []string{"354820091234567"})
+
+				if test.wantError != "" {
+					if err == nil || err.Error() != test.wantError {
+						t.Fatalf("error = %v, want %q", err, test.wantError)
+					}
+				} else if err != nil {
+					t.Fatal(err)
+				}
+
+				if sawRequest != wantRequest {
+					t.Errorf("the server saw %q, want %q", sawRequest, wantRequest)
+				}
+
+				if sawBody != "" {
+					t.Errorf("the server saw the body %q, want none", sawBody)
+				}
+
+				if out.String() != wantOutput {
+					t.Errorf("output = %q, want %q", out.String(), wantOutput)
+				}
+			})
+		}
+	}
+}
+
+func TestDeviceStartStopAndRestartArguments(t *testing.T) {
+	commands := []struct {
+		name      string
+		run       func(api.Invocation, []string) error
+		wantUsage string
+	}{
+		{"start", Start, "device start takes an IMEI"},
+		{"stop", Stop, "device stop takes an IMEI"},
+		{"restart", Restart, "device restart takes an IMEI"},
+	}
+
+	tests := []struct {
+		name      string
+		arguments []string
+		wantError string
+	}{
+		{name: "no arguments"},
+		{name: "two arguments", arguments: []string{"354820091234567", "extra"}},
+		{name: "short IMEI", arguments: []string{"123"}, wantError: "the IMEI is the 15-digit number printed on the device"},
+		{name: "non-digit IMEI", arguments: []string{"35482009123456x"}, wantError: "the IMEI is the 15-digit number printed on the device"},
+	}
+
+	for _, command := range commands {
+		for _, test := range tests {
+			wantError := test.wantError
+
+			if wantError == "" {
+				wantError = command.wantUsage
+			}
+
+			err := command.run(api.Invocation{}, test.arguments)
+
+			if err == nil || err.Error() != wantError {
+				t.Errorf("%s %s: error = %v, want %q", command.name, test.name, err, wantError)
+			}
+		}
 	}
 }
 

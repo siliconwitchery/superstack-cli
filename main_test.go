@@ -43,11 +43,8 @@ func TestCommandTable(t *testing.T) {
 
 func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
 	plannedCommands := map[string]bool{
-		"device start":   true,
-		"device stop":    true,
-		"device restart": true,
-		"dev":            true,
-		"tail":           true,
+		"dev":  true,
+		"tail": true,
 	}
 	answeredByDispatch := map[string]bool{
 		"version": true,
@@ -160,7 +157,7 @@ func TestNoPartImportsAnother(t *testing.T) {
 func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 	wired := []string{
 		"account balance", "account delete", "account topup",
-		"device list", "device pair", "device rename", "device unpair",
+		"device list", "device pair", "device rename", "device restart", "device start", "device stop", "device unpair",
 		"download",
 		"fleet create", "fleet delete", "fleet list", "fleet rename", "fleet transfer",
 		"key create", "key list", "key revoke",
