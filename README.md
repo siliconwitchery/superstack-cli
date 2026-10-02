@@ -4,8 +4,6 @@
 fleets, manage devices, and control who can reach them. It is a single static
 binary for managing Superstack from a terminal.
 
-Streaming logs is not available yet.
-
 ## Install
 
 - **macOS**, with [Homebrew](https://brew.sh):
@@ -39,6 +37,47 @@ Streaming logs is not available yet.
 - **Any platform.** Download an archive from the
   [releases page](https://github.com/siliconwitchery/superstack-cli/releases),
   unpack it, and move `superstack` onto your `PATH`. Repeat to update.
+
+## Follow a fleet's logs
+
+`tail` shows a fleet's logs as they arrive. Keep it open in one terminal while
+you upload code from another:
+
+```sh
+superstack tail <fleet_id> [imei ...] [-n num] [--log-file <file>]
+```
+
+- IMEIs after the fleet id limit the logs to those devices.
+- `-n` sets how many earlier logs to show first, from 0 to 1000. The default
+  is 10.
+- `--log-file` appends every line shown to a file.
+- Ctrl-C ends it.
+
+Each line gives the local date and time, the device's name or IMEI, the kind
+of log in brackets, and the text. The kind is `lua` for `print` output,
+`lifecycle` for code starting or stopping, and `error` for an error:
+
+```
+2026-10-02 12:01:07 kitchen[lua]: hello	1
+2026-10-02 12:01:07 kitchen[lifecycle]: Code started
+2026-10-02 12:01:09 kitchen[error]: Code crashed: main.lua:3: attempt to index a nil value
+```
+
+Lines from `tail` itself carry `superstack:` in place of a device.
+
+Filter the output, or a file written by `--log-file`, with `grep`:
+
+```sh
+grep ' kitchen\[' tail.log          # one device
+grep '\[error\]: ' tail.log         # only errors
+grep '^2026-10-02 12:' tail.log     # one hour
+```
+
+`print` output appears as Lua prints it. Characters that would control the
+terminal appear escaped, such as `\x1b`.
+
+If the server stops answering, `tail` says so and keeps trying. It then carries
+on from where it stopped, with no log lost or repeated.
 
 ## Local development
 

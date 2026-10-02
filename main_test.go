@@ -43,8 +43,7 @@ func TestCommandTable(t *testing.T) {
 
 func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
 	plannedCommands := map[string]bool{
-		"dev":  true,
-		"tail": true,
+		"dev": true,
 	}
 	answeredByDispatch := map[string]bool{
 		"version": true,
@@ -97,6 +96,7 @@ func TestNoPartImportsAnother(t *testing.T) {
 		"fleet":       {"api"},
 		"fleetkey":    {"api"},
 		"login":       {"api"},
+		"logs":        {"api"},
 		"member":      {"api"},
 	}
 
@@ -163,6 +163,7 @@ func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 		"key create", "key list", "key revoke",
 		"login", "logout",
 		"member add", "member list", "member remove",
+		"tail",
 		"upload",
 	}
 
@@ -227,7 +228,7 @@ func TestMainReportsFailureWithANonZeroExit(t *testing.T) {
 		{name: "no arguments", arguments: " ", wantCode: 0, wantSays: "Usage: superstack"},
 		{name: "the version", arguments: "version", wantCode: 0},
 		{name: "an unknown command", arguments: "nonsense", wantCode: 1, wantSays: "unknown command"},
-		{name: "a command nobody has built yet", arguments: "tail 111111111111111", wantCode: 1, wantSays: "not available yet"},
+		{name: "a command nobody has built yet", arguments: "dev 111111111111111 main.lua", wantCode: 1, wantSays: "not available yet"},
 		{name: "a command that needs a login", arguments: "fleet list", wantCode: 1, wantSays: "not logged in"},
 		{name: "a flag with no value", arguments: "--server", wantCode: 1, wantSays: "needs an address"},
 	}
