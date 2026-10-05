@@ -13,42 +13,35 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
+const timeLayout = "2006-01-02T15:04:05-07:00"
+
 func Tail(invocation api.Invocation, arguments []string) error {
 	positionals := []string{}
 	count := 10
-	logFilePath := ""
+	follow := true
 
 	for index := 0; index < len(arguments); index++ {
-		switch arguments[index] {
-		case "-n":
-			index++
-
-			value := ""
-
-			if index < len(arguments) {
-				value = arguments[index]
-			}
-
-			parsed, err := strconv.Atoi(value)
-
-			if err != nil || parsed < 0 || parsed > 1000 {
-				return errors.New("-n needs the number of earlier logs to show, from 0 to 1000")
-			}
-
-			count = parsed
-
-		case "--log-file":
-			index++
-
-			if index == len(arguments) {
-				return errors.New("--log-file needs a file")
-			}
-
-			logFilePath = arguments[index]
-
-		default:
+		if arguments[index] != "-n" {
 			positionals = append(positionals, arguments[index])
+			continue
 		}
+
+		index++
+
+		value := ""
+
+		if index < len(arguments) {
+			value = arguments[index]
+		}
+
+		parsed, err := strconv.Atoi(value)
+
+		if err != nil || parsed < 0 {
+			return errors.New("-n needs the number of logs to show")
+		}
+
+		count = parsed
+		follow = false
 	}
 
 	if len(positionals) == 0 {
@@ -75,37 +68,10 @@ func Tail(invocation api.Invocation, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	var logFile *os.File
-
-	if logFilePath != "" {
-		logFile, err = os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-
-		if err != nil {
-			return fmt.Errorf("%s could not be opened for writing", logFilePath)
-		}
-
-		defer logFile.Close()
-	}
-
-	show := func(lines string) error {
-		fmt.Fprint(invocation.Out, lines)
-
-		if logFile == nil {
-			return nil
-		}
-
-		_, err := logFile.WriteString(lines)
-
-		if err != nil {
-			return fmt.Errorf("%s could not be written", logFilePath)
-		}
-
-		return nil
-	}
-
 	path := "/fleets/" + strconv.FormatInt(fleetId, 10) + "/logs?"
 	query := url.Values{"imei": imeis, "last": {strconv.Itoa(count)}}
 	failures := 0
+	remaining := count
 
 	for {
 		request, err := api.AuthenticatedRequest(invocation, http.MethodGet, path+query.Encode(), nil)
@@ -116,11 +82,11 @@ func Tail(invocation api.Invocation, arguments []string) error {
 
 		answer := struct {
 			Logs []struct {
-				Imei       string  `json:"imei"`
-				Name       *string `json:"name"`
-				Kind       string  `json:"kind"`
-				Text       string  `json:"text"`
-				ReceivedAt string  `json:"received_at"`
+				Imei       string    `json:"imei"`
+				Name       string    `json:"name"`
+				Kind       string    `json:"kind"`
+				Text       string    `json:"text"`
+				ReceivedAt time.Time `json:"received_at"`
 			} `json:"logs"`
 			Next int64 `json:"next"`
 		}{}
@@ -153,11 +119,7 @@ func Tail(invocation api.Invocation, arguments []string) error {
 		// The query is unchanged on a retry, so no log is lost or shown twice.
 		if failed {
 			if failures == 0 {
-				err = show(time.Now().Format("2006-01-02 15:04:05") + " superstack: The server stopped answering. Trying again.\n")
-
-				if err != nil {
-					return err
-				}
+				fmt.Fprintln(os.Stderr, time.Now().Format(timeLayout)+" superstack: The server stopped answering. Trying again.")
 			}
 
 			delay := 10 * time.Second
@@ -174,34 +136,31 @@ func Tail(invocation api.Invocation, arguments []string) error {
 		}
 
 		if failures > 0 {
-			err = show(time.Now().Format("2006-01-02 15:04:05") + " superstack: The server is answering again.\n")
-
-			if err != nil {
-				return err
-			}
+			fmt.Fprintln(os.Stderr, time.Now().Format(timeLayout)+" superstack: The server is answering again.")
 
 			failures = 0
+		}
+
+		ended := false
+
+		if !follow {
+			isFull := len(answer.Logs) == 1000 // the most the server puts in one answer
+
+			if len(answer.Logs) > remaining {
+				answer.Logs = answer.Logs[:remaining]
+			}
+
+			remaining -= len(answer.Logs)
+			ended = remaining == 0 || !isFull
 		}
 
 		lines := strings.Builder{}
 
 		for _, entry := range answer.Logs {
-			received := "---------- --:--:--"
-
-			receivedAt, err := time.Parse(time.RFC3339, entry.ReceivedAt)
-
-			if err == nil {
-				received = receivedAt.Local().Format("2006-01-02 15:04:05")
-			}
-
-			device := entry.Imei
-
-			if entry.Name != nil && *entry.Name != "" {
-				device = *entry.Name
-			}
+			prefix := entry.ReceivedAt.Local().Format(timeLayout) + " " + entry.Imei + " " + entry.Kind + " [" + api.Printable(entry.Name) + "] "
 
 			for _, line := range strings.Split(entry.Text, "\n") {
-				lines.WriteString(received + " " + api.Printable(device) + "[" + api.Printable(entry.Kind) + "]: ")
+				lines.WriteString(prefix)
 
 				// Tabs and every graphic character print as Lua would print
 				// them. The rest is escaped so a device cannot drive the terminal.
@@ -220,13 +179,13 @@ func Tail(invocation api.Invocation, arguments []string) error {
 			}
 		}
 
-		err = show(lines.String())
+		fmt.Fprint(invocation.Out, lines.String())
 
-		if err != nil {
-			return err
+		if ended {
+			return nil
 		}
 
-		// The server holds this request for up to 20 seconds, inside the client's 30-second timeout.
-		query = url.Values{"after": {strconv.FormatInt(answer.Next, 10)}, "imei": imeis, "wait": {"20"}}
+		// The server holds this request for up to 20 seconds when it has no logs, inside the client's 30-second timeout.
+		query = url.Values{"after": {strconv.FormatInt(answer.Next, 10)}, "imei": imeis}
 	}
 }

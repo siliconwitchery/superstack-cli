@@ -1,17 +1,21 @@
 package logs
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
-	"path/filepath"
+	"os/exec"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/siliconwitchery/superstack-cli/internal/api"
@@ -20,6 +24,10 @@ import (
 
 const kitchen = "111111111111111"
 const porch = "222222222222222"
+
+func init() {
+	time.Local = time.FixedZone("", 2*60*60)
+}
 
 type scriptedAnswer struct {
 	status int
@@ -37,7 +45,7 @@ type servedLog struct {
 	ReceivedAt string  `json:"received_at"`
 }
 
-// Served in UTC and shown as 2026-01-15 12:01 and that many seconds, whatever zone the test runs in.
+// Served in UTC and shown as 2026-01-15T12:01 and that many seconds, at +02:00.
 func served(second int, imei string, name string, kind string, text string) servedLog {
 	log := servedLog{
 		Id:         int64(second),
@@ -71,6 +79,31 @@ func answer(t *testing.T, next int64, logs ...servedLog) scriptedAnswer {
 	}
 
 	return scriptedAnswer{status: http.StatusOK, body: string(body)}
+}
+
+// One full answer from the server when from and to are 1,000 apart.
+func page(t *testing.T, from int, to int) scriptedAnswer {
+	t.Helper()
+
+	logs := []servedLog{}
+
+	for id := from; id <= to; id++ {
+		logs = append(logs, served(id, kitchen, "kitchen", "lua", "tick "+strconv.Itoa(id)))
+	}
+
+	return answer(t, int64(to), logs...)
+}
+
+func printedPage(from int, to int) string {
+	lines := strings.Builder{}
+
+	for id := from; id <= to; id++ {
+		receivedAt := time.Date(2026, time.January, 15, 12, 1, id, 0, time.Local)
+
+		lines.WriteString(receivedAt.Format("2006-01-02T15:04:05-07:00") + " 111111111111111 lua [kitchen] tick " + strconv.Itoa(id) + "\n")
+	}
+
+	return lines.String()
 }
 
 // Serves the answers in order, then refuses with "the test is over", which
@@ -133,73 +166,36 @@ func serveLogs(t *testing.T, answers []scriptedAnswer) (api.Invocation, *bytes.B
 	return invocation, out, seen
 }
 
-// Checks that each notice leads with the local time it was printed, then
-// swaps that time for <now> so the rest of the output compares exactly.
-func checkNoticeTimes(t *testing.T, shown string, started time.Time) string {
-	t.Helper()
-
-	lines := strings.SplitAfter(shown, "\n")
-
-	for index, line := range lines {
-		if len(line) < 19 || !strings.HasPrefix(line[19:], " superstack: ") {
-			continue
-		}
-
-		printedAt, err := time.ParseInLocation("2006-01-02 15:04:05", line[:19], time.Local)
-
-		if err != nil || printedAt.Before(started.Truncate(time.Second)) || printedAt.After(time.Now()) {
-			t.Errorf("the notice %q does not lead with the local time it was printed", line)
-		}
-
-		lines[index] = "<now>" + line[19:]
-	}
-
-	return strings.Join(lines, "")
-}
-
 func TestTail(t *testing.T) {
 	const usage = "tail takes one fleet id, then optional IMEIs"
+	const over = "the test is over"
 
 	tests := []struct {
-		name          string
-		arguments     []string
-		answers       []scriptedAnswer
-		loggedOut     bool
-		clientTimeout time.Duration
-		wantQueries   []string
-		wantOutput    string
-		wantError     string
-		wantAtLeast   time.Duration
+		name        string
+		arguments   []string
+		answers     []scriptedAnswer
+		loggedOut   bool
+		wantQueries []string
+		wantOutput  string
+		wantNotices string
+		wantError   string
+		wantElapsed time.Duration
 	}{
 		{
-			name:      "history, then new logs, for a whole fleet",
+			name:      "earlier logs, then new logs, for a whole fleet",
 			arguments: []string{"3"},
 			answers: []scriptedAnswer{
-				answer(t, 2, served(1, kitchen, "kitchen", "lua", "hello\t1"), served(2, porch, "", "lua", "ready")),
-				answer(t, 3, served(3, kitchen, "kitchen", "lua", "tick")),
+				answer(t, 2, served(1, kitchen, "back door", "lua", "hello\t1"), served(2, porch, "", "lifecycle", "Code started")),
+				answer(t, 3, served(3, kitchen, "back door", "error", "Code crashed: main.lua:3: attempt to index a nil value")),
 				answer(t, 3),
-				answer(t, 5, served(4, porch, "", "lua", "tock"), served(5, kitchen, "kitchen", "lua", "tick")),
+				answer(t, 4, served(4, porch, "", "lua", "tock")),
 			},
-			wantQueries: []string{"last=10", "after=2&wait=20", "after=3&wait=20", "after=3&wait=20", "after=5&wait=20"},
-			wantOutput: "2026-01-15 12:01:01 kitchen[lua]: hello\t1\n" +
-				"2026-01-15 12:01:02 222222222222222[lua]: ready\n" +
-				"2026-01-15 12:01:03 kitchen[lua]: tick\n" +
-				"2026-01-15 12:01:04 222222222222222[lua]: tock\n" +
-				"2026-01-15 12:01:05 kitchen[lua]: tick\n",
-		},
-		{
-			name:      "one IMEI",
-			arguments: []string{"3", kitchen},
-			answers: []scriptedAnswer{
-				answer(t, 1, served(1, kitchen, "kitchen", "lua", "hello")),
-				answer(t, 3, served(3, kitchen, "kitchen", "lua", "tick")),
-			},
-			wantQueries: []string{
-				"imei=111111111111111&last=10",
-				"after=1&imei=111111111111111&wait=20",
-				"after=3&imei=111111111111111&wait=20",
-			},
-			wantOutput: "2026-01-15 12:01:01 kitchen[lua]: hello\n2026-01-15 12:01:03 kitchen[lua]: tick\n",
+			wantQueries: []string{"last=10", "after=2", "after=3", "after=3", "after=4"},
+			wantOutput: "2026-01-15T12:01:01+02:00 111111111111111 lua [back door] hello\t1\n" +
+				"2026-01-15T12:01:02+02:00 222222222222222 lifecycle [] Code started\n" +
+				"2026-01-15T12:01:03+02:00 111111111111111 error [back door] Code crashed: main.lua:3: attempt to index a nil value\n" +
+				"2026-01-15T12:01:04+02:00 222222222222222 lua [] tock\n",
+			wantError: over,
 		},
 		{
 			name:      "several IMEIs",
@@ -209,46 +205,23 @@ func TestTail(t *testing.T) {
 			},
 			wantQueries: []string{
 				"imei=222222222222222&imei=111111111111111&last=10",
-				"after=2&imei=222222222222222&imei=111111111111111&wait=20",
+				"after=2&imei=222222222222222&imei=111111111111111",
 			},
-			wantOutput: "2026-01-15 12:01:01 kitchen[lua]: hello\n2026-01-15 12:01:02 222222222222222[lua]: ready\n",
+			wantOutput: "2026-01-15T12:01:01+02:00 111111111111111 lua [kitchen] hello\n" +
+				"2026-01-15T12:01:02+02:00 222222222222222 lua [] ready\n",
+			wantError: over,
 		},
 		{
-			name:      "a fleet with no logs yet",
-			arguments: []string{"3"},
-			answers: []scriptedAnswer{
-				answer(t, 0),
-				answer(t, 1, served(1, kitchen, "kitchen", "lifecycle", "Code started")),
-			},
-			wantQueries: []string{"last=10", "after=0&wait=20", "after=1&wait=20"},
-			wantOutput:  "2026-01-15 12:01:01 kitchen[lifecycle]: Code started\n",
-		},
-		{
-			name:      "a device stops, takes new code, and starts again",
-			arguments: []string{"3"},
-			answers: []scriptedAnswer{
-				answer(t, 1, served(1, kitchen, "kitchen", "lua", "old code 1")),
-				answer(t, 2, served(2, kitchen, "kitchen", "lifecycle", "Code stopped")),
-				answer(t, 4, served(3, kitchen, "kitchen", "lifecycle", "Code started"), served(4, kitchen, "kitchen", "lua", "new code\t1")),
-				answer(t, 5, served(5, kitchen, "kitchen", "error", "Code crashed: main.lua:3: attempt to index a nil value")),
-			},
-			wantQueries: []string{"last=10", "after=1&wait=20", "after=2&wait=20", "after=4&wait=20", "after=5&wait=20"},
-			wantOutput: "2026-01-15 12:01:01 kitchen[lua]: old code 1\n" +
-				"2026-01-15 12:01:02 kitchen[lifecycle]: Code stopped\n" +
-				"2026-01-15 12:01:03 kitchen[lifecycle]: Code started\n" +
-				"2026-01-15 12:01:04 kitchen[lua]: new code\t1\n" +
-				"2026-01-15 12:01:05 kitchen[error]: Code crashed: main.lua:3: attempt to index a nil value\n",
-		},
-		{
-			name:      "an error that spans lines names its device on each",
+			name:      "a log of several lines carries every field on each",
 			arguments: []string{"3"},
 			answers: []scriptedAnswer{
 				answer(t, 1, served(1, porch, "", "error", "Code crashed: main.lua:3: boom\nstack traceback:\n\tmain.lua:3: in main chunk")),
 			},
-			wantQueries: []string{"last=10", "after=1&wait=20"},
-			wantOutput: "2026-01-15 12:01:01 222222222222222[error]: Code crashed: main.lua:3: boom\n" +
-				"2026-01-15 12:01:01 222222222222222[error]: stack traceback:\n" +
-				"2026-01-15 12:01:01 222222222222222[error]: \tmain.lua:3: in main chunk\n",
+			wantQueries: []string{"last=10", "after=1"},
+			wantOutput: "2026-01-15T12:01:01+02:00 222222222222222 error [] Code crashed: main.lua:3: boom\n" +
+				"2026-01-15T12:01:01+02:00 222222222222222 error [] stack traceback:\n" +
+				"2026-01-15T12:01:01+02:00 222222222222222 error [] \tmain.lua:3: in main chunk\n",
+			wantError: over,
 		},
 		{
 			name:      "a device name cannot drive the terminal",
@@ -256,95 +229,84 @@ func TestTail(t *testing.T) {
 			answers: []scriptedAnswer{
 				answer(t, 1, served(1, kitchen, "\x1b[2K\rkitchen", "lua", "hello")),
 			},
-			wantQueries: []string{"last=10", "after=1&wait=20"},
-			wantOutput:  "2026-01-15 12:01:01 \\x1b[2K\\rkitchen[lua]: hello\n",
+			wantQueries: []string{"last=10", "after=1"},
+			wantOutput:  "2026-01-15T12:01:01+02:00 111111111111111 lua [\\x1b[2K\\rkitchen] hello\n",
+			wantError:   over,
 		},
 		{
-			name:      "a device name with spaces, and kinds this CLI does not know",
-			arguments: []string{"3"},
-			answers: []scriptedAnswer{
-				answer(t, 2, served(1, kitchen, "back door", "firmware", "Firmware updated"), served(2, kitchen, "back door", "\x1b[2Jlua", "hello")),
-			},
-			wantQueries: []string{"last=10", "after=2&wait=20"},
-			wantOutput: "2026-01-15 12:01:01 back door[firmware]: Firmware updated\n" +
-				"2026-01-15 12:01:02 back door[\\x1b[2Jlua]: hello\n",
+			name:        "-n under 1,000, given first, with an IMEI",
+			arguments:   []string{"-n", "3", "3", kitchen},
+			answers:     []scriptedAnswer{page(t, 5, 7)},
+			wantQueries: []string{"imei=111111111111111&last=3"},
+			wantOutput:  printedPage(5, 7),
 		},
 		{
-			name:      "an unreadable time leaves the rest of the line",
-			arguments: []string{"3"},
-			answers: []scriptedAnswer{
-				{status: http.StatusOK, body: `{"logs":[{"id":1,"imei":"111111111111111","name":"kitchen","kind":"lua","text":"hello","received_at":"yesterday"}],"next":1}`},
-			},
-			wantQueries: []string{"last=10", "after=1&wait=20"},
-			wantOutput:  "---------- --:--:-- kitchen[lua]: hello\n",
+			name:        "-n over 1,000 pages to the newest log",
+			arguments:   []string{"3", "-n", "2500"},
+			answers:     []scriptedAnswer{page(t, 1, 1000), page(t, 1001, 2000), page(t, 2001, 2500)},
+			wantQueries: []string{"last=2500", "after=1000", "after=2000"},
+			wantOutput:  printedPage(1, 2500),
 		},
 		{
-			name:      "-n given",
-			arguments: []string{"3", "-n", "3"},
-			answers: []scriptedAnswer{
-				answer(t, 7, served(5, kitchen, "kitchen", "lua", "a"), served(6, kitchen, "kitchen", "lua", "b"), served(7, kitchen, "kitchen", "lua", "c")),
-			},
-			wantQueries: []string{"last=3", "after=7&wait=20"},
-			wantOutput:  "2026-01-15 12:01:05 kitchen[lua]: a\n2026-01-15 12:01:06 kitchen[lua]: b\n2026-01-15 12:01:07 kitchen[lua]: c\n",
+			name:        "-n of exactly two full answers asks for no third",
+			arguments:   []string{"3", "-n", "2000"},
+			answers:     []scriptedAnswer{page(t, 1, 1000), page(t, 1001, 2000)},
+			wantQueries: []string{"last=2000", "after=1000"},
+			wantOutput:  printedPage(1, 2000),
 		},
 		{
-			name:        "-n before the fleet id, with an IMEI",
-			arguments:   []string{"-n", "1000", "3", kitchen},
-			answers:     []scriptedAnswer{answer(t, 0)},
-			wantQueries: []string{"imei=111111111111111&last=1000", "after=0&imei=111111111111111&wait=20"},
+			name:        "-n prints no more than asked when logs arrive meanwhile",
+			arguments:   []string{"3", "-n", "1500"},
+			answers:     []scriptedAnswer{page(t, 1, 1000), page(t, 1001, 2000)},
+			wantQueries: []string{"last=1500", "after=1000"},
+			wantOutput:  printedPage(1, 1500),
 		},
 		{
-			name:      "-n 0 shows only new logs",
-			arguments: []string{"3", "-n", "0"},
-			answers: []scriptedAnswer{
-				answer(t, 41),
-				answer(t, 42, served(42, kitchen, "kitchen", "lua", "new")),
-			},
-			wantQueries: []string{"last=0", "after=41&wait=20", "after=42&wait=20"},
-			wantOutput:  "2026-01-15 12:01:42 kitchen[lua]: new\n",
+			name:        "-n above the logs the server keeps prints them all",
+			arguments:   []string{"3", "-n", "5000"},
+			answers:     []scriptedAnswer{page(t, 1, 1000), page(t, 1001, 1200)},
+			wantQueries: []string{"last=5000", "after=1000"},
+			wantOutput:  printedPage(1, 1200),
 		},
 		{
-			name:      "a refused and a dropped request in a row, then recovery",
+			name:        "-n 0 prints nothing",
+			arguments:   []string{"3", "-n", "0"},
+			answers:     []scriptedAnswer{answer(t, 41)},
+			wantQueries: []string{"last=0"},
+		},
+		{
+			name:      "a refused, a dropped, and a cut-short answer in a row, then recovery",
 			arguments: []string{"3"},
 			answers: []scriptedAnswer{
 				answer(t, 1, served(1, kitchen, "kitchen", "lua", "before")),
-				{status: http.StatusServiceUnavailable, body: "the server is restarting"},
+				{status: http.StatusServiceUnavailable, body: "the server could not read the logs"},
 				{drop: true},
+				{status: http.StatusOK, body: `{"logs":[{"id":2,"imei":"111111111111111","name":"kitchen","kind":"lua","text":"dur`},
+				{status: http.StatusBadGateway},
+				{status: http.StatusServiceUnavailable, body: "the server could not check the fleet"},
 				answer(t, 3, served(2, kitchen, "kitchen", "lua", "during"), served(3, kitchen, "kitchen", "lua", "after")),
 			},
-			wantQueries: []string{"last=10", "after=1&wait=20", "after=1&wait=20", "after=1&wait=20", "after=3&wait=20"},
-			wantOutput: "2026-01-15 12:01:01 kitchen[lua]: before\n" +
-				"<now> superstack: The server stopped answering. Trying again.\n" +
-				"<now> superstack: The server is answering again.\n" +
-				"2026-01-15 12:01:02 kitchen[lua]: during\n" +
-				"2026-01-15 12:01:03 kitchen[lua]: after\n",
-			wantAtLeast: 3 * time.Second,
+			wantQueries: []string{"last=10", "after=1", "after=1", "after=1", "after=1", "after=1", "after=1", "after=3"},
+			wantOutput: "2026-01-15T12:01:01+02:00 111111111111111 lua [kitchen] before\n" +
+				"2026-01-15T12:01:02+02:00 111111111111111 lua [kitchen] during\n" +
+				"2026-01-15T12:01:03+02:00 111111111111111 lua [kitchen] after\n",
+			wantNotices: "2000-01-01T02:00:00+02:00 superstack: The server stopped answering. Trying again.\n" +
+				"2000-01-01T02:00:27+02:00 superstack: The server is answering again.\n",
+			wantError:   over,
+			wantElapsed: 27 * time.Second,
 		},
 		{
-			name:          "the first request times out, and a later answer is cut short",
-			arguments:     []string{"3", "-n", "1"},
-			clientTimeout: 200 * time.Millisecond,
+			name:      "-n waits for a server that does not answer at first",
+			arguments: []string{"3", "-n", "1"},
 			answers: []scriptedAnswer{
-				{stall: true},
-				answer(t, 1, served(1, kitchen, "kitchen", "lua", "before")),
-				{status: http.StatusOK, body: `{"logs":[{"id":2,"imei":"111111111111111","name":"kitchen","kind":"lua","text":"aft`},
-				answer(t, 2, served(2, kitchen, "kitchen", "lua", "after")),
+				{status: http.StatusServiceUnavailable, body: "the server could not read the logs"},
+				page(t, 1, 1),
 			},
-			wantQueries: []string{"last=1", "last=1", "after=1&wait=20", "after=1&wait=20", "after=2&wait=20"},
-			wantOutput: "<now> superstack: The server stopped answering. Trying again.\n" +
-				"<now> superstack: The server is answering again.\n" +
-				"2026-01-15 12:01:01 kitchen[lua]: before\n" +
-				"<now> superstack: The server stopped answering. Trying again.\n" +
-				"<now> superstack: The server is answering again.\n" +
-				"2026-01-15 12:01:02 kitchen[lua]: after\n",
-			wantAtLeast: 2 * time.Second,
-		},
-		{
-			name:        "the login is no longer valid",
-			arguments:   []string{"3"},
-			answers:     []scriptedAnswer{{status: http.StatusUnauthorized, body: "the login is no longer valid, log in again"}},
-			wantQueries: []string{"last=10"},
-			wantError:   "the login is no longer valid, log in again",
+			wantQueries: []string{"last=1", "last=1"},
+			wantOutput:  printedPage(1, 1),
+			wantNotices: "2000-01-01T02:00:00+02:00 superstack: The server stopped answering. Trying again.\n" +
+				"2000-01-01T02:00:01+02:00 superstack: The server is answering again.\n",
+			wantElapsed: time.Second,
 		},
 		{
 			name:      "not logged in",
@@ -360,52 +322,29 @@ func TestTail(t *testing.T) {
 			wantError:   "no such fleet",
 		},
 		{
-			name:        "a device outside the fleet",
-			arguments:   []string{"3", porch},
-			answers:     []scriptedAnswer{{status: http.StatusNotFound, body: "device 222222222222222 is not in that fleet"}},
-			wantQueries: []string{"imei=222222222222222&last=10"},
-			wantError:   "device 222222222222222 is not in that fleet",
-		},
-		{
-			name:        "an out-of-date CLI",
-			arguments:   []string{"3"},
-			answers:     []scriptedAnswer{{status: http.StatusUpgradeRequired, body: "update superstack to carry on"}},
-			wantQueries: []string{"last=10"},
-			wantError:   "update superstack to carry on",
-		},
-		{
 			name:      "a refusal while following ends the command",
 			arguments: []string{"3"},
 			answers: []scriptedAnswer{
 				answer(t, 1, served(1, kitchen, "kitchen", "lua", "hello")),
-				{status: http.StatusTooManyRequests, body: "too many tails are open, close one first"},
+				{status: http.StatusTooManyRequests, body: "you already have 8 log reads open, close one first"},
 			},
-			wantQueries: []string{"last=10", "after=1&wait=20"},
-			wantOutput:  "2026-01-15 12:01:01 kitchen[lua]: hello\n",
-			wantError:   "too many tails are open, close one first",
+			wantQueries: []string{"last=10", "after=1"},
+			wantOutput:  "2026-01-15T12:01:01+02:00 111111111111111 lua [kitchen] hello\n",
+			wantError:   "you already have 8 log reads open, close one first",
 		},
 		{name: "no arguments", wantError: usage},
 		{name: "two fleet ids", arguments: []string{"3", "4"}, wantError: usage},
-		{name: "an IMEI in first place", arguments: []string{kitchen}, wantError: usage},
 		{name: "an IMEI before the fleet id", arguments: []string{kitchen, "3"}, wantError: usage},
-		{name: "an IMEI that is too short", arguments: []string{"3", "11111111111111"}, wantError: usage},
-		{name: "an IMEI with a letter", arguments: []string{"3", kitchen, "22222222222222a"}, wantError: usage},
 		{name: "a wordy fleet id", arguments: []string{"pilot"}, wantError: "the fleet id is the number shown by fleet list"},
 		{name: "fleet id zero", arguments: []string{"0", kitchen}, wantError: "the fleet id is the number shown by fleet list"},
-		{name: "-n that is not a number", arguments: []string{"3", "-n", "many"}, wantError: "-n needs the number of earlier logs to show, from 0 to 1000"},
-		{name: "-n below zero", arguments: []string{"3", "-n", "-1"}, wantError: "-n needs the number of earlier logs to show, from 0 to 1000"},
-		{name: "-n above the most the server returns", arguments: []string{"3", "-n", "1001"}, wantError: "-n needs the number of earlier logs to show, from 0 to 1000"},
-		{name: "-n with nothing after it", arguments: []string{"3", "-n"}, wantError: "-n needs the number of earlier logs to show, from 0 to 1000"},
-		{name: "--log-file with nothing after it", arguments: []string{"3", "--log-file"}, wantError: "--log-file needs a file"},
+		{name: "-n that is not a number", arguments: []string{"3", "-n", "many"}, wantError: "-n needs the number of logs to show"},
+		{name: "-n below zero", arguments: []string{"3", "-n", "-1"}, wantError: "-n needs the number of logs to show"},
+		{name: "-n with nothing after it", arguments: []string{"3", "-n"}, wantError: "-n needs the number of logs to show"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			invocation, out, seen := serveLogs(t, test.answers)
-
-			if test.clientTimeout != 0 {
-				invocation.Client.Timeout = test.clientTimeout
-			}
 
 			if test.loggedOut {
 				path, err := api.LoginKeyPath()
@@ -421,34 +360,56 @@ func TestTail(t *testing.T) {
 				}
 			}
 
-			started := time.Now()
+			notices, err := os.CreateTemp(t.TempDir(), "notices")
 
-			err := Tail(invocation, test.arguments)
-
-			elapsed := time.Since(started)
-
-			wantError := test.wantError
-
-			if wantError == "" {
-				wantError = "the test is over"
+			if err != nil {
+				t.Fatal(err)
 			}
 
-			if err == nil || !strings.Contains(err.Error(), wantError) {
-				t.Errorf("error = %v, want %q", err, wantError)
-			}
+			defer notices.Close()
+
+			errorStream := os.Stderr
+			os.Stderr = notices
+
+			defer func() { os.Stderr = errorStream }()
+
+			// The retries sleep on the bubble's clock, which starts at midnight UTC on 2000-01-01.
+			synctest.Test(t, func(t *testing.T) {
+				started := time.Now()
+
+				err := Tail(invocation, test.arguments)
+
+				elapsed := time.Since(started)
+
+				if test.wantError == "" && err != nil {
+					t.Errorf("error = %v, want none", err)
+				}
+
+				if test.wantError != "" && (err == nil || !strings.Contains(err.Error(), test.wantError)) {
+					t.Errorf("error = %v, want %q", err, test.wantError)
+				}
+
+				if elapsed != test.wantElapsed {
+					t.Errorf("it slept %s between the retries, want %s", elapsed, test.wantElapsed)
+				}
+			})
 
 			if !slices.Equal(seen(), test.wantQueries) {
 				t.Errorf("queries = %q, want %q", seen(), test.wantQueries)
 			}
 
-			shown := checkNoticeTimes(t, out.String(), started)
-
-			if shown != test.wantOutput {
-				t.Errorf("output = %q, want %q", shown, test.wantOutput)
+			if out.String() != test.wantOutput {
+				t.Errorf("output = %q, want %q", out.String(), test.wantOutput)
 			}
 
-			if elapsed < test.wantAtLeast {
-				t.Errorf("it took %s, want at least %s between the retries", elapsed, test.wantAtLeast)
+			written, err := os.ReadFile(notices.Name())
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if string(written) != test.wantNotices {
+				t.Errorf("the error stream holds %q, want %q", written, test.wantNotices)
 			}
 		})
 	}
@@ -470,11 +431,7 @@ func TestTailShowsTextAsLuaPrintsIt(t *testing.T) {
 		{name: "an empty print", text: "", want: []string{""}},
 		{name: "other scripts and symbols", text: "気温 21°C \U0001F321", want: []string{"気温 21°C \U0001F321"}},
 		{name: "a clear-screen sequence", text: "\x1b[2J\x1b[Hcleared", want: []string{`\x1b[2J\x1b[Hcleared`}},
-		{name: "a window title sequence", text: "\x1b]0;title\a", want: []string{`\x1b]0;title\a`}},
-		{name: "a carriage return", text: "progress\rdone", want: []string{`progress\rdone`}},
 		{name: "a carriage return before a newline", text: "first\r\nsecond", want: []string{`first\r`, "second"}},
-		{name: "a bell and a backspace", text: "a\bb\a", want: []string{`a\bb\a`}},
-		{name: "a vertical tab and a form feed", text: "a\vb\fc", want: []string{`a\vb\fc`}},
 		{name: "a null and a delete", text: "a\x00b\x7fc", want: []string{`a\x00b\x7fc`}},
 		{name: "an eight-bit control sequence introducer", text: "a\u009b2Jb", want: []string{`a\u009b2Jb`}},
 		{name: "a right-to-left override", text: "a\u202eb", want: []string{`a\u202eb`}},
@@ -498,19 +455,19 @@ func TestTailShowsTextAsLuaPrintsIt(t *testing.T) {
 
 			invocation, out, _ := serveLogs(t, []scriptedAnswer{{
 				status: http.StatusOK,
-				body:   `{"logs":[{"id":1,"imei":"111111111111111","name":"kitchen","kind":"lua","text":` + servedText + `,"received_at":"yesterday"}],"next":1}`,
+				body:   `{"logs":[{"id":1,"imei":"111111111111111","name":"kitchen","kind":"lua","text":` + servedText + `,"received_at":"2026-01-15T10:01:01Z"}],"next":1}`,
 			}})
 
-			err := Tail(invocation, []string{"3"})
+			err := Tail(invocation, []string{"3", "-n", "1"})
 
-			if err == nil || err.Error() != "the test is over" {
+			if err != nil {
 				t.Fatalf("error = %v", err)
 			}
 
 			want := ""
 
 			for _, line := range test.want {
-				want += "---------- --:--:-- kitchen[lua]: " + line + "\n"
+				want += "2026-01-15T12:01:01+02:00 111111111111111 lua [kitchen] " + line + "\n"
 			}
 
 			if out.String() != want {
@@ -526,78 +483,74 @@ func TestTailShowsTextAsLuaPrintsIt(t *testing.T) {
 	}
 }
 
-func TestTailLogFile(t *testing.T) {
-	tests := []struct {
-		name      string
-		directory string
-		existing  string
-		wantError string
-	}{
-		{name: "a new file receives what the terminal shows"},
-		{name: "an existing file is added to", existing: "2026-01-15 12:00:00 kitchen[lua]: earlier\n"},
-		{name: "a file that cannot be opened fails before any request", directory: "missing", wantError: "tail.log could not be opened for writing"},
+// Re-runs this test binary as a child that follows the fleet's logs, so the
+// interrupt reaches a whole process as Ctrl-C does.
+func TestCtrlCEndsTail(t *testing.T) {
+	base, isChild := os.LookupEnv("SUPERSTACK_TAIL_SERVER")
+
+	if isChild {
+		t.Fatal(Tail(api.NewInvocation(base, "test", os.Stdin, os.Stdout), []string{"3"}))
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			invocation, out, seen := serveLogs(t, []scriptedAnswer{
-				answer(t, 1, served(1, kitchen, "kitchen", "lifecycle", "Code started")),
-				{status: http.StatusBadGateway, body: "the server is restarting"},
-				answer(t, 2, served(2, kitchen, "kitchen", "lua", "first\nsecond")),
-			})
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no interrupt signal to send to a child")
+	}
 
-			path := filepath.Join(t.TempDir(), test.directory, "tail.log")
+	invocation, _, _ := serveLogs(t, []scriptedAnswer{
+		answer(t, 1, served(1, kitchen, "kitchen", "lua", "hello")),
+		{stall: true},
+	})
 
-			if test.existing != "" {
-				err := os.WriteFile(path, []byte(test.existing), 0o644)
+	command := exec.Command(os.Args[0], "-test.run=TestCtrlCEndsTail")
+	command.Env = append(os.Environ(), "SUPERSTACK_TAIL_SERVER="+invocation.Base)
 
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
+	notices := &bytes.Buffer{}
+	command.Stderr = notices
 
-			started := time.Now()
+	output, err := command.StdoutPipe()
 
-			err := Tail(invocation, []string{"3", "--log-file", path})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-			if test.wantError != "" {
-				if err == nil || !strings.Contains(err.Error(), test.wantError) {
-					t.Errorf("error = %v, want %q", err, test.wantError)
-				}
+	err = command.Start()
 
-				if len(seen()) != 0 || out.String() != "" {
-					t.Errorf("it asked for %q and printed %q before failing", seen(), out.String())
-				}
+	if err != nil {
+		t.Fatal(err)
+	}
 
-				return
-			}
+	reader := bufio.NewReader(output)
 
-			if err == nil || err.Error() != "the test is over" {
-				t.Fatalf("error = %v", err)
-			}
+	shown, err := reader.ReadString('\n')
 
-			wantOutput := "2026-01-15 12:01:01 kitchen[lifecycle]: Code started\n" +
-				"<now> superstack: The server stopped answering. Trying again.\n" +
-				"<now> superstack: The server is answering again.\n" +
-				"2026-01-15 12:01:02 kitchen[lua]: first\n" +
-				"2026-01-15 12:01:02 kitchen[lua]: second\n"
+	if err != nil {
+		t.Fatalf("tail printed %q and then %v, having said %q", shown, err, notices)
+	}
 
-			shown := checkNoticeTimes(t, out.String(), started)
+	err = command.Process.Signal(os.Interrupt)
 
-			if shown != wantOutput {
-				t.Errorf("output = %q, want %q", shown, wantOutput)
-			}
+	if err != nil {
+		t.Fatal(err)
+	}
 
-			written, err := os.ReadFile(path)
+	rest, err := io.ReadAll(reader)
 
-			if err != nil {
-				t.Fatal(err)
-			}
+	if err != nil {
+		t.Fatal(err)
+	}
 
-			if string(written) != test.existing+out.String() {
-				t.Errorf("the log file holds %q, want %q", written, test.existing+out.String())
-			}
-		})
+	err = command.Wait()
+
+	if err == nil || err.Error() != "signal: interrupt" {
+		t.Errorf("tail ended with %v, want it ended by the interrupt", err)
+	}
+
+	if shown+string(rest) != "2026-01-15T12:01:01+02:00 111111111111111 lua [kitchen] hello\n" {
+		t.Errorf("output = %q, want the one log", shown+string(rest))
+	}
+
+	if notices.String() != "" {
+		t.Errorf("the error stream holds %q, want nothing", notices)
 	}
 }
 

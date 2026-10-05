@@ -44,40 +44,44 @@ binary for managing Superstack from a terminal.
 you upload code from another:
 
 ```sh
-superstack tail <fleet_id> [imei ...] [-n num] [--log-file <file>]
+superstack tail <fleet_id> [imei ...] [-n num]
 ```
 
 - IMEIs after the fleet id limit the logs to those devices.
-- `-n` sets how many earlier logs to show first, from 0 to 1000. The default
-  is 10.
-- `--log-file` appends every line shown to a file.
-- Ctrl-C ends it.
+- Without `-n`, `tail` prints the 10 newest logs, then each new log as it
+  arrives. Ctrl-C ends it.
+- `-n` prints that many of the newest logs and ends. The server keeps logs for
+  fourteen days.
 
-Each line gives the local date and time, the device's name or IMEI, the kind
-of log in brackets, and the text. The kind is `lua` for `print` output,
-`lifecycle` for code starting or stopping, and `error` for an error:
+Each line gives the time, the IMEI, the kind of log, the device's name in
+brackets, and the text. The time is local and carries its offset. The kind is
+`lua` for `print` output, `lifecycle` for code starting or stopping, and
+`error` for an error. A device with no name prints `[]`:
 
 ```
-2026-10-02 12:01:07 kitchen[lua]: hello	1
-2026-10-02 12:01:07 kitchen[lifecycle]: Code started
-2026-10-02 12:01:09 kitchen[error]: Code crashed: main.lua:3: attempt to index a nil value
+2026-10-02T12:01:07+02:00 356938035643809 lua [back door] hello
+2026-10-02T12:01:09+02:00 356938035643809 error [back door] Code crashed: main.lua:3: ...
+2026-10-02T12:01:09+02:00 356938035643810 lifecycle [] Code started
 ```
 
-Lines from `tail` itself carry `superstack:` in place of a device.
-
-Filter the output, or a file written by `--log-file`, with `grep`:
+The time, the IMEI, and the kind never contain a space, so `grep` and `awk`
+can match on them:
 
 ```sh
-grep ' kitchen\[' tail.log          # one device
-grep '\[error\]: ' tail.log         # only errors
-grep '^2026-10-02 12:' tail.log     # one hour
+superstack tail 3 -n 500 | grep ' 356938035643809 error '   # one device's errors
 ```
 
-`print` output appears as Lua prints it. Characters that would control the
+`print` output appears as Lua prints it. A log of several lines prints one
+line for each, with every field repeated. Characters that would control the
 terminal appear escaped, such as `\x1b`.
 
-If the server stops answering, `tail` says so and keeps trying. It then carries
-on from where it stopped, with no log lost or repeated.
+If the server stops answering, `tail` says so on the error stream and keeps
+trying. It then carries on from where it stopped, with no log lost or
+repeated. The output holds only logs, so `tee` can keep a copy:
+
+```sh
+superstack tail 3 | tee tail.log
+```
 
 ## Local development
 

@@ -58,7 +58,7 @@ var sections = []dispatch.Section{
 	{
 		Title: "Logs",
 		Commands: []dispatch.Command{
-			{Name: "tail", Arguments: "<fleet_id> [imei ...] [-n num] [--log-file <file>]", Summary: "Show a fleet's logs as they arrive", Run: logs.Tail},
+			{Name: "tail", Arguments: "<fleet_id> [imei ...] [-n num]", Summary: "Show a fleet's logs as they arrive", Run: logs.Tail},
 		},
 	},
 	{
