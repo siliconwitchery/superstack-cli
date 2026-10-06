@@ -12,6 +12,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/fleetkey"
 	"github.com/siliconwitchery/superstack-cli/internal/login"
 	"github.com/siliconwitchery/superstack-cli/internal/member"
+	"github.com/siliconwitchery/superstack-cli/internal/tail"
 )
 
 const version = "0.0.4"
@@ -57,7 +58,7 @@ var sections = []dispatch.Section{
 	{
 		Title: "Logs",
 		Commands: []dispatch.Command{
-			{Name: "tail", Arguments: "<imei|fleet_id> [-n num] [--log-file <file>]", Summary: "Stream a device or fleet's log as it arrives"},
+			{Name: "tail", Arguments: "<fleet_id> [imei ...] [-n num [--offset num]]", Summary: "Follow a fleet's log as it arrives, or print its newest logs with -n", Run: tail.Tail},
 		},
 	},
 	{
