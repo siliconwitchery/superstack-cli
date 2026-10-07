@@ -58,7 +58,7 @@ var sections = []dispatch.Section{
 	{
 		Title: "Logs",
 		Commands: []dispatch.Command{
-			{Name: "tail", Arguments: "<fleet_id> [imei ...] [-n num [--offset num]]", Summary: "Follow a fleet's log as it arrives, or print its newest logs with -n", Run: tail.Tail},
+			{Name: "tail", Arguments: "<fleet_id> [imei ...] [-n num [-o num]]", Summary: "Follow a fleet's log as it arrives, or print a window of its past logs with -n", Run: tail.Tail},
 		},
 	},
 	{

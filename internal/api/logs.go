@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,14 +21,17 @@ type LogsAnswer struct {
 	Next int64      `json:"next"`
 }
 
-// position is last, for the newest logs, or after, for the logs newer than a cursor
-func FetchLogs(invocation Invocation, fleetID int64, imeis []string, position string, value int64) (LogsAnswer, error) {
-	query := url.Values{position: {strconv.FormatInt(value, 10)}}
+// A request that failed because the server could not be reached or is not available, so a follower may try again
+type Unavailable struct {
+	Reason string
+}
 
-	for _, imei := range imeis {
-		query.Add("imei", imei)
-	}
+func (unavailable Unavailable) Error() string {
+	return unavailable.Reason
+}
 
+// query holds last and optionally offset, or after, and any imei values that narrow the fleet
+func FetchLogs(invocation Invocation, fleetID int64, query url.Values) (LogsAnswer, error) {
 	request, err := AuthenticatedRequest(invocation, http.MethodGet,
 		"/fleets/"+strconv.FormatInt(fleetID, 10)+"/logs?"+query.Encode(), nil)
 
@@ -40,10 +42,15 @@ func FetchLogs(invocation Invocation, fleetID int64, imeis []string, position st
 	response, err := invocation.Client.Do(request)
 
 	if err != nil {
-		return LogsAnswer{}, errors.New("the server could not be reached, check your internet access")
+		return LogsAnswer{}, Unavailable{"the server could not be reached, check your internet access"}
 	}
 
 	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusBadGateway || response.StatusCode == http.StatusServiceUnavailable ||
+		response.StatusCode == http.StatusGatewayTimeout {
+		return LogsAnswer{}, Unavailable{ServerError(response).Error()}
+	}
 
 	if response.StatusCode != http.StatusOK {
 		return LogsAnswer{}, ServerError(response)

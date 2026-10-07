@@ -2,7 +2,6 @@ package tail
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -17,12 +16,14 @@ import (
 
 var testReceivedAt = time.Date(2026, 10, 6, 13, 4, 5, 678000000, time.UTC)
 
-// Serves stored logs by the paging rules of GET /fleets/{id}/logs, and records each query it answers
+// Serves stored logs by the rules of GET /fleets/{id}/logs, and records each query it answers. Each after
+// request takes the next follow answer, a nil answer being a refusal because the server is unavailable, and
+// one past the end is refused as no such fleet
 type testLogServer struct {
 	mutex   sync.Mutex
 	logs    []api.LogEntry
 	queries []string
-	follow  []api.LogsAnswer
+	follow  []*api.LogsAnswer
 }
 
 func (server *testLogServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -49,29 +50,34 @@ func (server *testLogServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if query.Has("last") {
 		last, _ := strconv.ParseInt(query.Get("last"), 10, 64)
-		window := selected[len(selected)-int(min(last, int64(len(selected)))):]
-		answer.Logs = window[:min(len(window), 1000)]
+		offset, _ := strconv.ParseInt(query.Get("offset"), 10, 64)
+
+		if last < 1 || last > 1000 || offset < 0 {
+			http.Error(w, "the number of logs is 1 to 1000", http.StatusBadRequest)
+			return
+		}
+
+		end := max(int64(len(selected))-offset, 0)
+		answer.Logs = selected[max(end-last, 0):end]
 
 		if len(selected) > 0 {
 			answer.Next = selected[len(selected)-1].Id
 		}
 	} else {
-		if len(server.follow) > 0 {
-			answer = server.follow[0]
-			server.follow = server.follow[1:]
-		} else if server.follow != nil {
+		if len(server.follow) == 0 {
+			http.Error(w, "no such fleet", http.StatusNotFound)
+			return
+		}
+
+		next := server.follow[0]
+		server.follow = server.follow[1:]
+
+		if next == nil {
 			http.Error(w, "the server is restarting", http.StatusServiceUnavailable)
 			return
-		} else {
-			after, _ := strconv.ParseInt(query.Get("after"), 10, 64)
-			answer.Next = after
-
-			for _, entry := range selected {
-				if entry.Id > after && len(answer.Logs) < 1000 {
-					answer.Logs = append(answer.Logs, entry)
-				}
-			}
 		}
+
+		answer = *next
 	}
 
 	if len(answer.Logs) > 0 {
@@ -126,10 +132,13 @@ func TestTailRefusesArguments(t *testing.T) {
 		{[]string{"0"}, "number shown by fleet list"},
 		{[]string{"3", "12345"}, "12345 is not an IMEI"},
 		{[]string{"3", "-n"}, "-n needs a number"},
-		{[]string{"3", "-n", "-1"}, "-n takes a whole number"},
-		{[]string{"3", "-n", "ten"}, "-n takes a whole number"},
-		{[]string{"3", "--offset", "5"}, "it needs -n"},
-		{[]string{"3", "-n", "9223372036854775807", "--offset", "1"}, "more logs than can be counted"},
+		{[]string{"3", "-o"}, "-o needs a number"},
+		{[]string{"3", "-n", "0"}, "-n takes a number of logs from 1 to 1000"},
+		{[]string{"3", "-n", "1001"}, "-n takes a number of logs from 1 to 1000"},
+		{[]string{"3", "-n", "ten"}, "-n takes a number of logs from 1 to 1000"},
+		{[]string{"3", "-n", "1", "-o", "0"}, "-o takes how many of the newest logs to skip"},
+		{[]string{"3", "-n", "1", "-o", "-1"}, "-o takes how many of the newest logs to skip"},
+		{[]string{"3", "-o", "5"}, "it needs -n"},
 	}
 
 	for _, test := range tests {
@@ -150,28 +159,27 @@ func TestTailRefusesArguments(t *testing.T) {
 	}
 }
 
-func TestTailPrintsTheNewestLogs(t *testing.T) {
+func TestTailPrintsAWindow(t *testing.T) {
 	tests := []struct {
-		name        string
-		arguments   []string
-		stored      int
-		wantTexts   []string
-		wantQueries []string
+		name      string
+		arguments []string
+		stored    int
+		wantFirst string
+		wantLast  string
+		wantCount int
+		wantQuery string
 	}{
-		{"the newest two", []string{"3", "-n", "2"}, 5, []string{"log 4", "log 5"}, []string{"last=2"}},
-		{"more than are stored", []string{"3", "-n", "10"}, 3, []string{"log 1", "log 2", "log 3"}, []string{"last=10"}},
-		{"none asked", []string{"3", "-n", "0"}, 5, []string{}, nil},
-		{"none stored", []string{"3", "-n", "5"}, 0, []string{}, []string{"last=5"}},
-		{"one device", []string{"3", "111111111111111", "-n", "2"}, 5, []string{"log 3", "log 5"}, []string{"imei=111111111111111&last=2"}},
-		{"two devices", []string{"3", "111111111111111", "222222222222222", "-n", "1"}, 5, []string{"log 5"}, []string{"imei=111111111111111&imei=222222222222222&last=1"}},
-		{"skipping the newest", []string{"3", "-n", "2", "--offset", "1"}, 5, []string{"log 3", "log 4"}, []string{"last=1", "last=3"}},
-		{"a page that runs out", []string{"3", "-n", "2", "--offset", "4"}, 5, []string{"log 1"}, []string{"last=4", "last=6"}},
-		{"skipping every log", []string{"3", "-n", "2", "--offset", "5"}, 5, []string{}, []string{"last=5", "last=7"}},
-		{"skipping more than are stored", []string{"3", "-n", "2", "--offset", "9"}, 5, []string{}, []string{"last=9"}},
-		{"flags before the fleet", []string{"-n", "1", "3"}, 5, []string{"log 5"}, []string{"last=1"}},
-		{"paging past one answer", []string{"3", "-n", "1200"}, 2500, nil, []string{"last=1200", "after=2300"}},
-		{"paging past one answer with an offset", []string{"3", "-n", "1200", "--offset", "100"}, 2500, nil, []string{"last=100", "last=1300", "after=2200"}},
-		{"stopping at an answer short of one thousand", []string{"3", "-n", "5000"}, 1500, nil, []string{"last=5000", "after=1000"}},
+		{"the newest two", []string{"3", "-n", "2"}, 5, "log 4", "log 5", 2, "last=2"},
+		{"more than are stored", []string{"3", "-n", "10"}, 3, "log 1", "log 3", 3, "last=10"},
+		{"none stored", []string{"3", "-n", "5"}, 0, "", "", 0, "last=5"},
+		{"one device", []string{"3", "111111111111111", "-n", "2"}, 5, "log 3", "log 5", 2, "imei=111111111111111&last=2"},
+		{"two devices", []string{"3", "111111111111111", "222222222222222", "-n", "1"}, 5, "log 5", "log 5", 1, "imei=111111111111111&imei=222222222222222&last=1"},
+		{"sitting back from the newest", []string{"3", "-n", "2", "-o", "1"}, 5, "log 3", "log 4", 2, "last=2&offset=1"},
+		{"a window that runs out", []string{"3", "-n", "2", "-o", "4"}, 5, "log 1", "log 1", 1, "last=2&offset=4"},
+		{"a window past every log", []string{"3", "-n", "2", "-o", "9"}, 5, "", "", 0, "last=2&offset=9"},
+		{"flags before the fleet", []string{"-n", "1", "3"}, 5, "log 5", "log 5", 1, "last=1"},
+		{"the largest window", []string{"3", "-n", "1000"}, 2500, "log 1501", "log 2500", 1000, "last=1000"},
+		{"the largest window sitting back", []string{"3", "-n", "1000", "-o", "100"}, 2500, "log 1401", "log 2400", 1000, "last=1000&offset=100"},
 	}
 
 	for _, test := range tests {
@@ -187,38 +195,22 @@ func TestTailPrintsTheNewestLogs(t *testing.T) {
 
 			texts := printedTexts(out.String())
 
-			if test.wantTexts != nil && !slices.Equal(texts, test.wantTexts) {
-				t.Errorf("printed %q, want %q", texts, test.wantTexts)
+			if len(texts) != test.wantCount || (test.wantCount > 0 && (texts[0] != test.wantFirst || texts[len(texts)-1] != test.wantLast)) {
+				t.Errorf("printed %d logs %q, want %d from %q to %q", len(texts), texts, test.wantCount, test.wantFirst, test.wantLast)
 			}
 
-			if !slices.Equal(server.queries, test.wantQueries) {
-				t.Errorf("asked %q, want %q", server.queries, test.wantQueries)
+			if !slices.Equal(server.queries, []string{test.wantQuery}) {
+				t.Errorf("asked %q, want only %q", server.queries, test.wantQuery)
 			}
 		})
 	}
-
-	server := &testLogServer{logs: testLogs(2500)}
-	invocation, out := apitest.LoggedInInvocation(t, server)
-
-	err := Tail(invocation, []string{"3", "-n", "1200", "--offset", "100"})
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	texts := printedTexts(out.String())
-
-	if len(texts) != 1200 || texts[0] != "log 1201" || texts[1199] != "log 2400" {
-		t.Fatalf("printed %d logs from %q to %q, want 1200 from log 1201 to log 2400",
-			len(texts), texts[0], texts[len(texts)-1])
-	}
 }
 
-func TestTailPrintsEachLineSafely(t *testing.T) {
+func TestTailPrintsEachLogSafely(t *testing.T) {
 	name := "roof \x1b[2Junit"
 	server := &testLogServer{logs: []api.LogEntry{
 		{Id: 1, Imei: "111111111111111", Name: nil, Kind: "state", Text: "Code started", ReceivedAt: testReceivedAt},
-		{Id: 2, Imei: "222222222222222", Name: &name, Kind: "print", Text: "21.5\tok\nsecond\x1b]0;title\a‮line", ReceivedAt: testReceivedAt},
+		{Id: 2, Imei: "222222222222222", Name: &name, Kind: "print", Text: "21.5\tok\nsecond\x1b]0;title\a‮line\n\nlast", ReceivedAt: testReceivedAt},
 	}}
 	invocation, out := apitest.LoggedInInvocation(t, server)
 
@@ -229,9 +221,13 @@ func TestTailPrintsEachLineSafely(t *testing.T) {
 	}
 
 	received := testReceivedAt.Local().Format("2006-01-02T15:04:05-07:00")
-	want := fmt.Sprintf("%[1]s 111111111111111 state [] Code started\n"+
-		"%[1]s 222222222222222 print [roof \\x1b[2Junit] 21.5\tok\n"+
-		"%[1]s 222222222222222 print [roof \\x1b[2Junit] second\\x1b]0;title\\a\\u202eline\n", received)
+	fields := received + " 222222222222222 print [roof \\x1b[2Junit] "
+	indent := strings.Repeat(" ", len(fields))
+	want := received + " 111111111111111 state [] Code started\n" +
+		fields + "21.5\tok\n" +
+		indent + "second\\x1b]0;title\\a\\u202eline\n" +
+		indent + "\n" +
+		indent + "last\n"
 
 	if out.String() != want {
 		t.Fatalf("printed\n%q\nwant\n%q", out.String(), want)
@@ -246,8 +242,9 @@ func TestTailFollows(t *testing.T) {
 	logs := testLogs(7)
 	server := &testLogServer{
 		logs: logs[:5],
-		follow: []api.LogsAnswer{
+		follow: []*api.LogsAnswer{
 			{Logs: logs[5:6]},
+			nil,
 			{Logs: []api.LogEntry{}, Next: 6},
 			{Logs: logs[6:7]},
 		},
@@ -256,19 +253,20 @@ func TestTailFollows(t *testing.T) {
 
 	err := Tail(invocation, []string{"3", "222222222222222"})
 
-	if err == nil || !strings.Contains(err.Error(), "the server is restarting") {
-		t.Fatalf("error = %v, want the server's refusal", err)
+	if err == nil || err.Error() != "no such fleet" {
+		t.Fatalf("error = %v, want the server's refusal that ends the follow", err)
 	}
 
 	texts := printedTexts(out.String())
 
-	if !slices.Equal(texts, []string{"log 6", "log 7"}) {
-		t.Errorf("printed %q, want only the logs that arrived while following", texts)
+	if !slices.Equal(texts, []string{"log 2", "log 4", "log 6", "log 7"}) {
+		t.Errorf("printed %q, want the newest logs then the ones that arrived while following", texts)
 	}
 
 	wantQueries := []string{
-		"imei=222222222222222&last=0",
+		"imei=222222222222222&last=100",
 		"after=4&imei=222222222222222",
+		"after=6&imei=222222222222222",
 		"after=6&imei=222222222222222",
 		"after=6&imei=222222222222222",
 		"after=7&imei=222222222222222",

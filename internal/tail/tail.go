@@ -4,22 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/siliconwitchery/superstack-cli/internal/api"
 )
 
 func Tail(invocation api.Invocation, arguments []string) error {
 	positionals := []string{}
-	count := int64(-1)
+	count := int64(0)
 	offset := int64(0)
-	offsetGiven := false
 
 	for index := 0; index < len(arguments); index++ {
 		switch arguments[index] {
-		case "-n", "--offset":
+		case "-n", "-o":
 			flag := arguments[index]
 
 			if index+1 == len(arguments) {
@@ -30,15 +31,18 @@ func Tail(invocation api.Invocation, arguments []string) error {
 
 			value, err := strconv.ParseInt(arguments[index], 10, 64)
 
-			if err != nil || value < 0 {
-				return fmt.Errorf("%s takes a whole number of logs", flag)
-			}
-
 			if flag == "-n" {
+				if err != nil || value < 1 || value > 1000 {
+					return errors.New("-n takes a number of logs from 1 to 1000")
+				}
+
 				count = value
 			} else {
+				if err != nil || value < 1 {
+					return errors.New("-o takes how many of the newest logs to skip, 1 or more")
+				}
+
 				offset = value
-				offsetGiven = true
 			}
 
 		default:
@@ -56,104 +60,96 @@ func Tail(invocation api.Invocation, arguments []string) error {
 		return errors.New("the fleet id is the number shown by fleet list")
 	}
 
-	imeis := positionals[1:]
+	query := url.Values{}
 
-	for _, imei := range imeis {
+	for _, imei := range positionals[1:] {
 		if len(imei) != 15 || strings.ContainsFunc(imei, func(digit rune) bool { return digit < '0' || digit > '9' }) {
 			return fmt.Errorf("%s is not an IMEI, which is the 15-digit number printed on the device", api.Printable(imei))
 		}
+
+		query.Add("imei", imei)
 	}
 
-	if offsetGiven && count < 0 {
-		return errors.New("--offset skips the newest logs before -n prints, so it needs -n")
+	if offset > 0 && count == 0 {
+		return errors.New("-o sits the window back from the newest logs, so it needs -n")
 	}
 
-	if count > math.MaxInt64-offset {
-		return errors.New("-n and --offset together ask for more logs than can be counted")
-	}
+	// A window of past logs
+	if count > 0 {
+		query.Set("last", strconv.FormatInt(count, 10))
 
-	// Follow
-	if count < 0 {
-		answer, err := api.FetchLogs(invocation, fleetID, imeis, "last", 0)
+		if offset > 0 {
+			query.Set("offset", strconv.FormatInt(offset, 10))
+		}
+
+		answer, err := api.FetchLogs(invocation, fleetID, query)
 
 		if err != nil {
 			return err
 		}
 
-		for {
-			answer, err = api.FetchLogs(invocation, fleetID, imeis, "after", answer.Next)
-
-			if err != nil {
-				return err
-			}
-
-			for _, entry := range answer.Logs {
-				printLog(invocation.Out, entry)
-			}
+		for _, entry := range answer.Logs {
+			printLog(invocation.Out, entry)
 		}
-	}
 
-	if count == 0 {
 		return nil
 	}
 
-	// The oldest of the newest offset logs is the first one not to print
-	boundary := int64(math.MaxInt64)
+	// The newest logs, then follow
+	query.Set("last", "100")
 
-	if offset > 0 {
-		answer, err := api.FetchLogs(invocation, fleetID, imeis, "last", offset)
-
-		if err != nil {
-			return err
-		}
-
-		if int64(len(answer.Logs)) < min(offset, 1000) {
-			return nil
-		}
-
-		boundary = answer.Logs[0].Id
-	}
-
-	answer, err := api.FetchLogs(invocation, fleetID, imeis, "last", count+offset)
+	answer, err := api.FetchLogs(invocation, fleetID, query)
 
 	if err != nil {
 		return err
 	}
 
-	printed := int64(0)
+	for _, entry := range answer.Logs {
+		printLog(invocation.Out, entry)
+	}
+
+	query.Del("last")
+	cursor := answer.Next
 
 	for {
-		for _, entry := range answer.Logs {
-			if printed == count || entry.Id >= boundary {
-				return nil
-			}
+		query.Set("after", strconv.FormatInt(cursor, 10))
 
-			printLog(invocation.Out, entry)
-			printed++
+		answer, err = api.FetchLogs(invocation, fleetID, query)
+
+		var unavailable api.Unavailable
+
+		if errors.As(err, &unavailable) {
+			time.Sleep(time.Second)
+			continue
 		}
-
-		if printed == count || len(answer.Logs) < 1000 {
-			return nil
-		}
-
-		answer, err = api.FetchLogs(invocation, fleetID, imeis, "after", answer.Next)
 
 		if err != nil {
 			return err
 		}
+
+		for _, entry := range answer.Logs {
+			printLog(invocation.Out, entry)
+		}
+
+		cursor = answer.Next
 	}
 }
 
 func printLog(out io.Writer, entry api.LogEntry) {
-	received := entry.ReceivedAt.Local().Format("2006-01-02T15:04:05-07:00")
 	name := ""
 
 	if entry.Name != nil {
 		name = printableKeepingTabs(*entry.Name)
 	}
 
-	for _, line := range strings.Split(entry.Text, "\n") {
-		fmt.Fprintf(out, "%s %s %s [%s] %s\n", received, entry.Imei, entry.Kind, name, printableKeepingTabs(line))
+	fields := fmt.Sprintf("%s %s %s [%s] ",
+		entry.ReceivedAt.Local().Format("2006-01-02T15:04:05-07:00"), entry.Imei, entry.Kind, name)
+	lines := strings.Split(entry.Text, "\n")
+
+	fmt.Fprintf(out, "%s%s\n", fields, printableKeepingTabs(lines[0]))
+
+	for _, line := range lines[1:] {
+		fmt.Fprintf(out, "%s%s\n", strings.Repeat(" ", utf8.RuneCountInString(fields)), printableKeepingTabs(line))
 	}
 }
 
