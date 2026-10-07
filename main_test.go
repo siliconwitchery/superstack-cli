@@ -42,9 +42,7 @@ func TestCommandTable(t *testing.T) {
 }
 
 func TestOnlyPlannedCommandsAreUnimplemented(t *testing.T) {
-	plannedCommands := map[string]bool{
-		"dev": true,
-	}
+	plannedCommands := map[string]bool{}
 	answeredByDispatch := map[string]bool{
 		"version": true,
 		"help":    true,
@@ -85,12 +83,13 @@ func TestNoPartImportsAnother(t *testing.T) {
 	const fixtures = "api/apitest"
 
 	// The graph docs/cli.md publishes: a part reaches api and nothing else,
-	// and only main reaches dispatch.
+	// except dev, which runs upload and tail, and only main reaches dispatch.
 	allowed := map[string][]string{
 		"api":         {},
 		"api/apitest": {"api"},
 		"dispatch":    {"api"},
 		"account":     {"api"},
+		"dev":         {"api", "files", "tail"},
 		"device":      {"api"},
 		"files":       {"api"},
 		"fleet":       {"api"},
@@ -157,6 +156,7 @@ func TestNoPartImportsAnother(t *testing.T) {
 func TestTheTableWiresEveryCommandOffered(t *testing.T) {
 	wired := []string{
 		"account balance", "account delete", "account topup",
+		"dev",
 		"device list", "device pair", "device rename", "device restart", "device start", "device stop", "device unpair",
 		"download",
 		"fleet create", "fleet delete", "fleet list", "fleet rename", "fleet transfer",
@@ -228,7 +228,7 @@ func TestMainReportsFailureWithANonZeroExit(t *testing.T) {
 		{name: "no arguments", arguments: " ", wantCode: 0, wantSays: "Usage: superstack"},
 		{name: "the version", arguments: "version", wantCode: 0},
 		{name: "an unknown command", arguments: "nonsense", wantCode: 1, wantSays: "unknown command"},
-		{name: "a command nobody has built yet", arguments: "dev 111111111111111 main.lua", wantCode: 1, wantSays: "not available yet"},
+		{name: "a command missing its arguments", arguments: "dev", wantCode: 1, wantSays: "takes an IMEI or fleet id"},
 		{name: "a command that needs a login", arguments: "fleet list", wantCode: 1, wantSays: "not logged in"},
 		{name: "a flag with no value", arguments: "--server", wantCode: 1, wantSays: "needs an address"},
 	}
