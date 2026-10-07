@@ -210,7 +210,7 @@ func TestTailPrintsEachLogSafely(t *testing.T) {
 	name := "roof \x1b[2Junit"
 	server := &testLogServer{logs: []api.LogEntry{
 		{Id: 1, Imei: "111111111111111", Name: nil, Kind: "state", Text: "Code started", ReceivedAt: testReceivedAt},
-		{Id: 2, Imei: "222222222222222", Name: &name, Kind: "print", Text: "21.5\tok\nsecond\x1b]0;title\a‮line\n\nlast", ReceivedAt: testReceivedAt},
+		{Id: 2, Imei: "222222222222222", Name: &name, Kind: "print", Text: "21.5\tok\nsecond\x1b]0;title\a‮line\n\nsaid \"hi\" in C:\\temp\nlast", ReceivedAt: testReceivedAt},
 	}}
 	invocation, out := apitest.LoggedInInvocation(t, server)
 
@@ -227,6 +227,7 @@ func TestTailPrintsEachLogSafely(t *testing.T) {
 		fields + "21.5\tok\n" +
 		indent + "second\\x1b]0;title\\a\\u202eline\n" +
 		indent + "\n" +
+		indent + "said \"hi\" in C:\\temp\n" +
 		indent + "last\n"
 
 	if out.String() != want {

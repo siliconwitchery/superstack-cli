@@ -154,11 +154,20 @@ func printLog(out io.Writer, entry api.LogEntry) {
 }
 
 func printableKeepingTabs(text string) string {
-	segments := strings.Split(text, "\t")
+	printable := strings.Builder{}
 
-	for index, segment := range segments {
-		segments[index] = api.Printable(segment)
+	for index := 0; index < len(text); {
+		character, size := utf8.DecodeRuneInString(text[index:])
+		encoded := text[index : index+size]
+		index += size
+
+		if character == '\t' || (strconv.IsGraphic(character) && !(character == utf8.RuneError && size == 1)) {
+			printable.WriteString(encoded)
+			continue
+		}
+
+		printable.WriteString(api.Printable(encoded))
 	}
 
-	return strings.Join(segments, "\t")
+	return printable.String()
 }
