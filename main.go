@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/siliconwitchery/superstack-cli/internal/account"
+	"github.com/siliconwitchery/superstack-cli/internal/dev"
 	"github.com/siliconwitchery/superstack-cli/internal/device"
 	"github.com/siliconwitchery/superstack-cli/internal/dispatch"
 	"github.com/siliconwitchery/superstack-cli/internal/files"
@@ -52,7 +53,7 @@ var sections = []dispatch.Section{
 		Commands: []dispatch.Command{
 			{Name: "upload", Arguments: "<imei|fleet_id> <file> ...", Summary: "Upload files or directories to a device or fleet", Run: files.Upload},
 			{Name: "download", Arguments: "<imei> <path>", Summary: "Download the code last uploaded to a device into <path>", Run: files.Download},
-			{Name: "dev", Arguments: "<imei|fleet_id> <file> ... [--log-file <file>]", Summary: "Upload on every change, and tail"},
+			{Name: "dev", Arguments: "<imei|fleet_id> <file> ...", Summary: "Upload on every change, and tail", Run: dev.Dev},
 		},
 	},
 	{
