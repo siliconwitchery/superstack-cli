@@ -240,41 +240,67 @@ func TestTailPrintsEachLogSafely(t *testing.T) {
 }
 
 func TestTailFollows(t *testing.T) {
-	logs := testLogs(7)
-	server := &testLogServer{
-		logs: logs[:5],
-		follow: []*api.LogsAnswer{
-			{Logs: logs[5:6]},
-			nil,
-			{Logs: []api.LogEntry{}, Next: 6},
-			{Logs: logs[6:7]},
+	tests := []struct {
+		name       string
+		follow     func(invocation api.Invocation, arguments []string) error
+		wantTexts  []string
+		wantNewest string
+	}{
+		{
+			name:       "after the newest logs",
+			follow:     Tail,
+			wantTexts:  []string{"log 2", "log 4", "log 6", "log 7"},
+			wantNewest: "imei=222222222222222&last=100",
+		},
+		{
+			name: "from now",
+			follow: func(invocation api.Invocation, arguments []string) error {
+				return Follow(invocation, arguments, true)
+			},
+			wantTexts:  []string{"log 6", "log 7"},
+			wantNewest: "imei=222222222222222&last=1",
 		},
 	}
-	invocation, out := apitest.LoggedInInvocation(t, server)
 
-	err := Tail(invocation, []string{"3", "222222222222222"})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			logs := testLogs(7)
+			server := &testLogServer{
+				logs: logs[:5],
+				follow: []*api.LogsAnswer{
+					{Logs: logs[5:6]},
+					nil,
+					{Logs: []api.LogEntry{}, Next: 6},
+					{Logs: logs[6:7]},
+				},
+			}
+			invocation, out := apitest.LoggedInInvocation(t, server)
 
-	if err == nil || err.Error() != "no such fleet" {
-		t.Fatalf("error = %v, want the server's refusal that ends the follow", err)
-	}
+			err := test.follow(invocation, []string{"3", "222222222222222"})
 
-	texts := printedTexts(out.String())
+			if err == nil || err.Error() != "no such fleet" {
+				t.Fatalf("error = %v, want the server's refusal that ends the follow", err)
+			}
 
-	if !slices.Equal(texts, []string{"log 2", "log 4", "log 6", "log 7"}) {
-		t.Errorf("printed %q, want the newest logs then the ones that arrived while following", texts)
-	}
+			texts := printedTexts(out.String())
 
-	wantQueries := []string{
-		"imei=222222222222222&last=100",
-		"after=4&imei=222222222222222",
-		"after=6&imei=222222222222222",
-		"after=6&imei=222222222222222",
-		"after=6&imei=222222222222222",
-		"after=7&imei=222222222222222",
-	}
+			if !slices.Equal(texts, test.wantTexts) {
+				t.Errorf("printed %q, want %q", texts, test.wantTexts)
+			}
 
-	if !slices.Equal(server.queries, wantQueries) {
-		t.Errorf("asked %q, want %q", server.queries, wantQueries)
+			wantQueries := []string{
+				test.wantNewest,
+				"after=4&imei=222222222222222",
+				"after=6&imei=222222222222222",
+				"after=6&imei=222222222222222",
+				"after=6&imei=222222222222222",
+				"after=7&imei=222222222222222",
+			}
+
+			if !slices.Equal(server.queries, wantQueries) {
+				t.Errorf("asked %q, want %q", server.queries, wantQueries)
+			}
+		})
 	}
 }
 
