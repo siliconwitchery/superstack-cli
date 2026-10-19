@@ -14,6 +14,11 @@ import (
 )
 
 func Tail(invocation api.Invocation, arguments []string) error {
+	return Follow(invocation, arguments, false)
+}
+
+// Takes tail's arguments. fromNow leaves out every log stored before the follow starts
+func Follow(invocation api.Invocation, arguments []string, fromNow bool) error {
 	positionals := []string{}
 	count := int64(0)
 	offset := int64(0)
@@ -98,14 +103,20 @@ func Tail(invocation api.Invocation, arguments []string) error {
 	// The newest logs, then follow
 	query.Set("last", "100")
 
+	if fromNow {
+		query.Set("last", "1")
+	}
+
 	answer, err := api.FetchLogs(invocation, fleetID, query)
 
 	if err != nil {
 		return err
 	}
 
-	for _, entry := range answer.Logs {
-		printLog(invocation.Out, entry)
+	if !fromNow {
+		for _, entry := range answer.Logs {
+			printLog(invocation.Out, entry)
+		}
 	}
 
 	query.Del("last")

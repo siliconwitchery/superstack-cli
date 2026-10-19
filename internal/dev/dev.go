@@ -68,7 +68,7 @@ func Dev(invocation api.Invocation, arguments []string) error {
 	tailEnded := make(chan error, 1)
 
 	go func() {
-		tailEnded <- tail.Tail(invocation, tailArguments)
+		tailEnded <- tail.Follow(invocation, tailArguments, true)
 	}()
 
 	// Upload again once the watched paths have changed and then stayed still for one poll

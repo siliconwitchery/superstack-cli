@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -147,7 +148,7 @@ func TestDevUploadsOnChangeAndFollowsTheLog(t *testing.T) {
 		name         string
 		target       string
 		watchFile    bool
-		wantQuery    string
+		wantQueries  []string
 		wantUploaded string
 		wantRefusal  string
 	}{
@@ -155,14 +156,14 @@ func TestDevUploadsOnChangeAndFollowsTheLog(t *testing.T) {
 			name:         "a file to a device",
 			target:       "354820091234567",
 			watchFile:    true,
-			wantQuery:    "after=2&imei=354820091234567",
+			wantQueries:  []string{"imei=354820091234567&last=1", "after=2&imei=354820091234567"},
 			wantUploaded: "Uploaded 1 file to device 354820091234567. It arrives at its next check-in.\n",
 			wantRefusal:  "does not exist",
 		},
 		{
 			name:         "a directory to a fleet",
 			target:       "3",
-			wantQuery:    "after=2",
+			wantQueries:  []string{"last=1", "after=2"},
 			wantUploaded: "Uploaded 1 file to 2 devices in fleet 3. It arrives at each device's next check-in.\n",
 			wantRefusal:  "there are no files to upload",
 		},
@@ -226,8 +227,8 @@ func TestDevUploadsOnChangeAndFollowsTheLog(t *testing.T) {
 			server.mutex.Lock()
 			defer server.mutex.Unlock()
 
-			if len(server.queries) < 2 || server.queries[1] != test.wantQuery {
-				t.Errorf("log queries were %q, want the follow to ask %q", server.queries, test.wantQuery)
+			if len(server.queries) < 2 || !slices.Equal(server.queries[:2], test.wantQueries) {
+				t.Errorf("log queries were %q, want them to start %q", server.queries, test.wantQueries)
 			}
 
 			wantBodies := []string{
@@ -248,8 +249,8 @@ func TestDevUploadsOnChangeAndFollowsTheLog(t *testing.T) {
 				t.Errorf("output was:\n%s\nwant %q three times", output, test.wantUploaded)
 			}
 
-			if !strings.Contains(output, "[boiler] log 1\n") || !strings.Contains(output, "[boiler] log 2\n") {
-				t.Errorf("output was:\n%s\nwant the two stored logs", output)
+			if strings.Contains(output, "[boiler] log") {
+				t.Errorf("output was:\n%s\nwant none of the logs stored before the first upload", output)
 			}
 
 			if !strings.HasPrefix(output, test.wantUploaded) {
