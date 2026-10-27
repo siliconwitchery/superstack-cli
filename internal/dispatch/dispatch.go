@@ -13,6 +13,7 @@ type Command struct {
 	Name      string
 	Arguments string
 	Summary   string
+	Details   string
 	Run       func(invocation api.Invocation, arguments []string) error
 }
 
@@ -171,6 +172,15 @@ func Dispatch(sections []Section, version string, arguments []string, in io.Read
 		}
 
 		fmt.Fprintf(invocation.Out, "superstack %s\n\n  %s\n", signature, topic.Summary)
+
+		if topic.Details != "" {
+			fmt.Fprintln(invocation.Out)
+
+			for _, line := range strings.Split(topic.Details, "\n") {
+				fmt.Fprintf(invocation.Out, "  %s\n", line)
+			}
+		}
+
 		return nil
 	}
 
