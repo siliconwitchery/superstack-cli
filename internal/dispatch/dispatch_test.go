@@ -200,7 +200,7 @@ func TestResolve(t *testing.T) {
 func TestDispatch(t *testing.T) {
 	sections := []Section{
 		{Title: "Things", Commands: []Command{
-			{Name: "thing list", Arguments: "<id>", Summary: "List a thing", Run: func(invocation api.Invocation, arguments []string) error {
+			{Name: "thing list", Arguments: "<id>", Summary: "List a thing", Details: "Lists one thing.\nThe id is a number.", Run: func(invocation api.Invocation, arguments []string) error {
 				fmt.Fprintln(invocation.Out, "Listed.")
 				return nil
 			}},
@@ -232,7 +232,8 @@ func TestDispatch(t *testing.T) {
 		{name: "long version flag", arguments: []string{"--version"}, wantOutput: "1.2.3\n"},
 		{name: "version command", arguments: []string{"version"}, wantOutput: "1.2.3\n"},
 		{name: "help command", arguments: []string{"help"}, wantOutput: wantHelp},
-		{name: "topic help", arguments: []string{"help", "thing", "list"}, wantOutput: "superstack thing list <id>\n\n  List a thing\n"},
+		{name: "topic help", arguments: []string{"help", "thing", "list"}, wantOutput: "superstack thing list <id>\n\n  List a thing\n\n  Lists one thing.\n  The id is a number.\n"},
+		{name: "topic help without details", arguments: []string{"help", "thing", "pending"}, wantOutput: "superstack thing pending\n\n  Wait for a thing\n"},
 		{name: "unknown help topic", arguments: []string{"help", "missing"}, wantError: "unknown command \"missing\"\nRun 'superstack help' for the list."},
 		{name: "unknown command", arguments: []string{"missing"}, wantError: "unknown command \"missing\"\nRun 'superstack help' for the list."},
 		{name: "unavailable command", arguments: []string{"thing", "pending"}, wantError: "thing pending is not available yet"},
