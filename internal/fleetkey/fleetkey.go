@@ -63,10 +63,10 @@ func Create(invocation api.Invocation, arguments []string) error {
 	}
 
 	if created.FleetKey == "" {
-		return errors.New("the key was not created, try again")
+		return errors.New("the fleet key was not created, try again")
 	}
 
-	fmt.Fprintf(invocation.Out, "Created key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, api.Printable(created.FleetKey))
+	fmt.Fprintf(invocation.Out, "Created fleet key %d.\n\n  %s\n\nAnyone holding it can send data to the fleet, and you will not see it again.\n", created.Id, api.Printable(created.FleetKey))
 
 	return nil
 }
@@ -130,9 +130,9 @@ func List(invocation api.Invocation, arguments []string) error {
 
 	if len(fleetKeys) == 0 {
 		if chosenFleetId == 0 {
-			fmt.Fprintln(invocation.Out, "No keys yet. Create one with key create.")
+			fmt.Fprintln(invocation.Out, "No fleet keys yet. Create one with key create.")
 		} else {
-			fmt.Fprintln(invocation.Out, "No keys on that fleet yet.")
+			fmt.Fprintln(invocation.Out, "No fleet keys on that fleet yet.")
 		}
 
 		return nil
@@ -181,7 +181,7 @@ func Revoke(invocation api.Invocation, arguments []string) error {
 	fleetKeyId, err := strconv.ParseInt(arguments[0], 10, 64)
 
 	if err != nil || fleetKeyId < 1 {
-		return errors.New("the key id is the number shown by key list")
+		return errors.New("the fleet key id is the number shown by key list")
 	}
 
 	fleetKeys, err := api.FetchFleetKeys(invocation)
@@ -201,10 +201,10 @@ func Revoke(invocation api.Invocation, arguments []string) error {
 	}
 
 	if !found {
-		return errors.New("no such key")
+		return errors.New("no such fleet key")
 	}
 
-	fmt.Fprintf(invocation.Out, "Revoke key %q? Anything still using it stops reaching the fleet. [y/N] ", label)
+	fmt.Fprintf(invocation.Out, "Revoke fleet key %q? Anything still using it stops reaching the fleet. [y/N] ", label)
 
 	answer, _ := bufio.NewReader(invocation.In).ReadString('\n')
 
@@ -234,7 +234,7 @@ func Revoke(invocation api.Invocation, arguments []string) error {
 		return api.ServerError(response)
 	}
 
-	fmt.Fprintf(invocation.Out, "Revoked key %q.\n", label)
+	fmt.Fprintf(invocation.Out, "Revoked fleet key %q.\n", label)
 
 	return nil
 }
