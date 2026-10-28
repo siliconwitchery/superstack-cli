@@ -102,14 +102,14 @@ var sections = []dispatch.Section{
 		},
 	},
 	{
-		Title: "Keys",
+		Title: "Fleet keys",
 		Commands: []dispatch.Command{
-			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a key for sending data to a fleet", Run: fleetkey.Create,
-				Details: "Shows the key once, so copy it then. Anyone holding it can send data to\n" +
-					"the fleet."},
-			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the keys that can reach your fleets", Run: fleetkey.List},
-			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a key from reaching its fleet", Run: fleetkey.Revoke,
-				Details: "Asks first. Anything still using the key can no longer reach the fleet."},
+			{Name: "key create", Arguments: "<fleet_id> <label>", Summary: "Create a fleet key for sending data to a fleet", Run: fleetkey.Create,
+				Details: "Shows the fleet key once, so copy it then. Anyone holding it can send\n" +
+					"data to the fleet."},
+			{Name: "key list", Arguments: "[fleet_id] [--json]", Summary: "List the fleet keys that can reach your fleets", Run: fleetkey.List},
+			{Name: "key revoke", Arguments: "<key_id>", Summary: "Stop a fleet key from reaching its fleet", Run: fleetkey.Revoke,
+				Details: "Asks first. Anything still using the fleet key can no longer reach the fleet."},
 		},
 	},
 	{
