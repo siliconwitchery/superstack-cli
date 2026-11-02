@@ -16,7 +16,7 @@ import (
 	"github.com/siliconwitchery/superstack-cli/internal/tail"
 )
 
-const version = "0.0.4"
+const version = "0.0.5"
 
 var sections = []dispatch.Section{
 	{
