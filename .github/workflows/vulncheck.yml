@@ -1,0 +1,39 @@
+name: vulncheck
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Check main
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+      # GOTOOLCHAIN=auto switches Go to the release's own toolchain, so this
+      # checks the standard library that users run.
+      - name: Check the newest release
+        if: success() || failure()
+        env:
+          GOTOOLCHAIN: auto
+        run: |
+          tag=$(git tag -l 'v*' | sort -V | tail -1)
+          echo "Checking $tag"
+          git checkout --quiet "$tag"
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
