@@ -38,13 +38,6 @@ a single static binary for managing Superstack from a terminal.
   [releases page](https://github.com/siliconwitchery/superstack-cli/releases),
   unpack it, and move `superstack` onto your `PATH`. Repeat to update.
 
-To check that a downloaded archive was built from this repository by its
-release workflow, run this with the [GitHub CLI](https://cli.github.com):
-
-```sh
-gh attestation verify <archive> --repo siliconwitchery/superstack-cli
-```
-
 Each archive's release also carries its SBOM, `<archive>.sbom.json`.
 
 ## Local development
